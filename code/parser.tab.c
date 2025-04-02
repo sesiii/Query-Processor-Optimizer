@@ -69,22 +69,18 @@
 /* First part of user prologue.  */
 #line 1 "parser.y"
 
-#include "parser.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "ast.h"
 
-void yyerror(const char *s);
-int yylex();
+extern int yylex();
+extern int yyparse();
+extern FILE* yyin;
+void yyerror(const char* s);
 
-Query *new_query(char *col, char *tbl, char *cond_col, int cond_val) {
-    Query *q = malloc(sizeof(Query));
-    q->column = col;
-    q->table = tbl;
-    q->condition_col = cond_col;
-    q->condition_val = cond_val;
-    return q;
-}
+AstNode* ast_root = NULL;
 
-
-#line 88 "parser.tab.c"
+#line 84 "parser.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -115,20 +111,27 @@ enum yysymbol_kind_t
   YYSYMBOL_YYEOF = 0,                      /* "end of file"  */
   YYSYMBOL_YYerror = 1,                    /* error  */
   YYSYMBOL_YYUNDEF = 2,                    /* "invalid token"  */
-  YYSYMBOL_SELECT = 3,                     /* SELECT  */
-  YYSYMBOL_FROM = 4,                       /* FROM  */
-  YYSYMBOL_WHERE = 5,                      /* WHERE  */
-  YYSYMBOL_GT = 6,                         /* GT  */
-  YYSYMBOL_SEMICOLON = 7,                  /* SEMICOLON  */
-  YYSYMBOL_IDENTIFIER = 8,                 /* IDENTIFIER  */
-  YYSYMBOL_NUMBER = 9,                     /* NUMBER  */
-  YYSYMBOL_YYACCEPT = 10,                  /* $accept  */
-  YYSYMBOL_query = 11,                     /* query  */
-  YYSYMBOL_where_clause = 12,              /* where_clause  */
-  YYSYMBOL_column = 13,                    /* column  */
-  YYSYMBOL_table = 14,                     /* table  */
-  YYSYMBOL_condition_col = 15,             /* condition_col  */
-  YYSYMBOL_condition_val = 16              /* condition_val  */
+  YYSYMBOL_IDENTIFIER = 3,                 /* IDENTIFIER  */
+  YYSYMBOL_NUMBER = 4,                     /* NUMBER  */
+  YYSYMBOL_SELECT = 5,                     /* SELECT  */
+  YYSYMBOL_FROM = 6,                       /* FROM  */
+  YYSYMBOL_WHERE = 7,                      /* WHERE  */
+  YYSYMBOL_JOIN = 8,                       /* JOIN  */
+  YYSYMBOL_ON = 9,                         /* ON  */
+  YYSYMBOL_AND = 10,                       /* AND  */
+  YYSYMBOL_OR = 11,                        /* OR  */
+  YYSYMBOL_COMMA = 12,                     /* COMMA  */
+  YYSYMBOL_EQ = 13,                        /* EQ  */
+  YYSYMBOL_LT = 14,                        /* LT  */
+  YYSYMBOL_GT = 15,                        /* GT  */
+  YYSYMBOL_YYACCEPT = 16,                  /* $accept  */
+  YYSYMBOL_query = 17,                     /* query  */
+  YYSYMBOL_select_clause = 18,             /* select_clause  */
+  YYSYMBOL_column_list = 19,               /* column_list  */
+  YYSYMBOL_from_clause = 20,               /* from_clause  */
+  YYSYMBOL_table_ref = 21,                 /* table_ref  */
+  YYSYMBOL_where_clause = 22,              /* where_clause  */
+  YYSYMBOL_condition = 23                  /* condition  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -454,21 +457,21 @@ union yyalloc
 #endif /* !YYCOPY_NEEDED */
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  5
+#define YYFINAL  6
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   13
+#define YYLAST   22
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  10
+#define YYNTOKENS  16
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  7
+#define YYNNTS  8
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  8
+#define YYNRULES  14
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  17
+#define YYNSTATES  28
 
 /* YYMAXUTOK -- Last valid token kind.  */
-#define YYMAXUTOK   264
+#define YYMAXUTOK   270
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -508,14 +511,16 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
-       5,     6,     7,     8,     9
+       5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
+      15
 };
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int8 yyrline[] =
 {
-       0,    32,    32,    35,    40,    45,    46,    47,    48
+       0,    31,    31,    38,    44,    48,    54,    60,    64,    71,
+      74,    80,    84,    88,    92
 };
 #endif
 
@@ -531,9 +536,10 @@ static const char *yysymbol_name (yysymbol_kind_t yysymbol) YY_ATTRIBUTE_UNUSED;
    First, the terminals, then, starting at YYNTOKENS, nonterminals.  */
 static const char *const yytname[] =
 {
-  "\"end of file\"", "error", "\"invalid token\"", "SELECT", "FROM",
-  "WHERE", "GT", "SEMICOLON", "IDENTIFIER", "NUMBER", "$accept", "query",
-  "where_clause", "column", "table", "condition_col", "condition_val", YY_NULLPTR
+  "\"end of file\"", "error", "\"invalid token\"", "IDENTIFIER", "NUMBER",
+  "SELECT", "FROM", "WHERE", "JOIN", "ON", "AND", "OR", "COMMA", "EQ",
+  "LT", "GT", "$accept", "query", "select_clause", "column_list",
+  "from_clause", "table_ref", "where_clause", "condition", YY_NULLPTR
 };
 
 static const char *
@@ -543,7 +549,7 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-8)
+#define YYPACT_NINF (-21)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -557,8 +563,9 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-      -3,    -7,     2,    -8,    -1,    -8,    -4,    -8,     0,    -2,
-       1,    -8,     3,    -8,     4,    -8,    -8
+       3,     4,     9,     5,    -2,   -21,   -21,    10,     7,     4,
+     -21,     8,    12,   -21,   -21,    14,    -1,    -7,    11,     2,
+      12,    12,    12,   -21,   -21,    -7,    -7,    -7
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -566,20 +573,21 @@ static const yytype_int8 yypact[] =
    means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       0,     0,     0,     5,     0,     1,     0,     6,     4,     0,
-       0,     7,     0,     2,     0,     8,     3
+       0,     0,     0,     0,     4,     3,     1,     0,     9,     0,
+       7,     6,     0,     2,     5,     0,     0,    10,     0,     0,
+       0,     0,     0,    12,    11,    13,    14,     8
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-      -8,    -8,    -8,    -8,    -8,    -8,    -8
+     -21,   -21,   -21,    13,   -21,   -21,   -21,   -20
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     2,    10,     4,     8,    12,    16
+       0,     2,     3,     5,     8,    11,    13,    17
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -587,34 +595,39 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-       1,     3,     5,     6,     7,     9,    11,     0,    13,    14,
-       0,     0,     0,    15
+      25,    26,    27,    20,    21,    23,    24,     4,     1,     6,
+       9,     7,    19,    10,    12,    16,    15,    18,     0,     0,
+      22,     0,    14
 };
 
 static const yytype_int8 yycheck[] =
 {
-       3,     8,     0,     4,     8,     5,     8,    -1,     7,     6,
-      -1,    -1,    -1,     9
+      20,    21,    22,    10,    11,     3,     4,     3,     5,     0,
+      12,     6,    13,     3,     7,     3,     8,     3,    -1,    -1,
+       9,    -1,     9
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,     3,    11,     8,    13,     0,     4,     8,    14,     5,
-      12,     8,    15,     7,     6,     9,    16
+       0,     5,    17,    18,     3,    19,     0,     6,    20,    12,
+       3,    21,     7,    22,    19,     8,     3,    23,     3,    13,
+      10,    11,     9,     3,     4,    23,    23,    23
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    10,    11,    12,    12,    13,    14,    15,    16
+       0,    16,    17,    18,    19,    19,    20,    21,    21,    22,
+      22,    23,    23,    23,    23
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     6,     4,     0,     1,     1,     1,     1
+       0,     2,     3,     2,     1,     3,     2,     1,     5,     0,
+       2,     3,     3,     3,     3
 };
 
 
@@ -1077,48 +1090,113 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-  case 3: /* where_clause: WHERE condition_col GT condition_val  */
-#line 36 "parser.y"
+  case 2: /* query: select_clause from_clause where_clause  */
+#line 32 "parser.y"
     {
-        query = new_query((yyvsp[(-4) - (4)].str), (yyvsp[(-3) - (4)].str), (yyvsp[-2].str), (yyvsp[0].num));  // column, table from earlier
+        (yyval.node) = create_query_node((yyvsp[-2].node), (yyvsp[-1].node), (yyvsp[0].node));
+        ast_root = (yyval.node);
     }
-#line 1086 "parser.tab.c"
-    break;
-
-  case 4: /* where_clause: %empty  */
-#line 40 "parser.y"
-    {
-        query = new_query((yyvsp[(-2) - (0)].str), (yyvsp[(-1) - (0)].str), NULL, 0);  // No condition
-    }
-#line 1094 "parser.tab.c"
-    break;
-
-  case 5: /* column: IDENTIFIER  */
-#line 45 "parser.y"
-                   { (yyval.str) = (yyvsp[0].str); }
 #line 1100 "parser.tab.c"
     break;
 
-  case 6: /* table: IDENTIFIER  */
-#line 46 "parser.y"
-                  { (yyval.str) = (yyvsp[0].str); }
-#line 1106 "parser.tab.c"
+  case 3: /* select_clause: SELECT column_list  */
+#line 39 "parser.y"
+    {
+        (yyval.node) = create_select_node((yyvsp[0].col_list));
+    }
+#line 1108 "parser.tab.c"
     break;
 
-  case 7: /* condition_col: IDENTIFIER  */
-#line 47 "parser.y"
-                          { (yyval.str) = (yyvsp[0].str); }
-#line 1112 "parser.tab.c"
+  case 4: /* column_list: IDENTIFIER  */
+#line 45 "parser.y"
+    {
+        (yyval.col_list) = create_column_list((yyvsp[0].strval), NULL);
+    }
+#line 1116 "parser.tab.c"
     break;
 
-  case 8: /* condition_val: NUMBER  */
-#line 48 "parser.y"
-                      { (yyval.num) = (yyvsp[0].num); }
-#line 1118 "parser.tab.c"
+  case 5: /* column_list: IDENTIFIER COMMA column_list  */
+#line 49 "parser.y"
+    {
+        (yyval.col_list) = create_column_list((yyvsp[-2].strval), (yyvsp[0].col_list));
+    }
+#line 1124 "parser.tab.c"
+    break;
+
+  case 6: /* from_clause: FROM table_ref  */
+#line 55 "parser.y"
+    {
+        (yyval.node) = create_from_node((yyvsp[0].node));
+    }
+#line 1132 "parser.tab.c"
+    break;
+
+  case 7: /* table_ref: IDENTIFIER  */
+#line 61 "parser.y"
+    {
+        (yyval.node) = create_table_node((yyvsp[0].strval));
+    }
+#line 1140 "parser.tab.c"
+    break;
+
+  case 8: /* table_ref: table_ref JOIN IDENTIFIER ON condition  */
+#line 65 "parser.y"
+    {
+        (yyval.node) = create_join_node((yyvsp[-4].node), (yyvsp[-2].strval), (yyvsp[0].node));
+    }
+#line 1148 "parser.tab.c"
+    break;
+
+  case 9: /* where_clause: %empty  */
+#line 71 "parser.y"
+    {
+        (yyval.node) = NULL;
+    }
+#line 1156 "parser.tab.c"
+    break;
+
+  case 10: /* where_clause: WHERE condition  */
+#line 75 "parser.y"
+    {
+        (yyval.node) = create_where_node((yyvsp[0].node));
+    }
+#line 1164 "parser.tab.c"
+    break;
+
+  case 11: /* condition: IDENTIFIER EQ NUMBER  */
+#line 81 "parser.y"
+    {
+        (yyval.node) = create_condition_node((yyvsp[-2].strval), "=", (yyvsp[0].intval));
+    }
+#line 1172 "parser.tab.c"
+    break;
+
+  case 12: /* condition: IDENTIFIER EQ IDENTIFIER  */
+#line 85 "parser.y"
+    {
+        (yyval.node) = create_eq_condition_node((yyvsp[-2].strval), (yyvsp[0].strval));
+    }
+#line 1180 "parser.tab.c"
+    break;
+
+  case 13: /* condition: condition AND condition  */
+#line 89 "parser.y"
+    {
+        (yyval.node) = create_and_condition_node((yyvsp[-2].node), (yyvsp[0].node));
+    }
+#line 1188 "parser.tab.c"
+    break;
+
+  case 14: /* condition: condition OR condition  */
+#line 93 "parser.y"
+    {
+        (yyval.node) = create_or_condition_node((yyvsp[-2].node), (yyvsp[0].node));
+    }
+#line 1196 "parser.tab.c"
     break;
 
 
-#line 1122 "parser.tab.c"
+#line 1200 "parser.tab.c"
 
       default: break;
     }
@@ -1311,9 +1389,10 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 50 "parser.y"
+#line 98 "parser.y"
 
 
-void yyerror(const char *s) {
-    fprintf(stderr, "Error: %s\n", s);
+void yyerror(const char* s) {
+    fprintf(stderr, "Parse error: %s\n", s);
+    exit(1);
 }
