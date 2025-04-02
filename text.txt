@@ -1,0 +1,56 @@
+1
+Project Proposal: Query Processor and Optimizer
+Group Details:
+Dadi Sasank Kumar 22CS10020
+Jeevan Varma 22CS10038
+Gurram Dhanunjay 22CS10029
+Venkata Yaswanth 22CS30031
+Nerella Trilochan 22CS10048
+Due: March 23, 2025
+Title
+Query Processor and Optimizer
+Abstract
+Efficient query processing is a cornerstone of database management systems, balancing
+performance and resource utilization. This project aims to develop a query processor and
+optimizer that parses SQL-like queries, constructs computation graphs, generates execu-
+tion plans, and estimates operational costs. Leveraging Bison and Flex, we will build
+a parser to translate queries into a structured format. The system will then produce
+optimized execution plans, inspired by PostgreSQL and SQLite, incorporating basic op-
+timizations such as selection pushdown and join reordering, as outlined in Silberschatz et
+al.’s ”Database System Concepts.” Cost estimation will rely on simplified table statistics
+and operation complexity. By integrating systems-level tools with database theory, this
+project will deliver a functional prototype that demonstrates query transformation and
+cost-aware optimization within a constrained timeline.
+Weekly Work Plan
+Week 1: March 17–23, 2025 (Proposal Submission)
+•Finalize project scope and objectives.
+•Research query processing and optimization (Silberschatz Ch. 13–14).
+•Draft and submit proposal.
+•Set up Bison and Flex for SQL-like grammar.
+•Implement parser to generate abstract syntax tree (AST).
+1
+•Convert AST to basic computation graph for simple queries.
+Week 2: March 24–30, 2025 (Parser and Computation Graph)
+•Generate initial execution plans (e.g., relational algebra).
+•Develop basic cost estimation model (I/O and CPU costs).
+•Test with single-table and join queries.
+Week 3: March 31–April 6, 2025 (Execution Plan and Cost Estimation)
+•Implement selection pushdown and join reordering optimizations.
+•Compare costs of optimized vs. unoptimized plans.
+•Test with diverse queries and debug.
+Week 4: April 14–15, 2025 (Finalization and Submission)
+•Polish code and validate results.
+•Write final report and prepare demo.
+•Submit by April 15, 2025.
+2
+
+
+
+we are to implement this from scratch, a relational algebra tree hence created, should them be sent into the optimizer for optimization and therefor print an optimized relational algebra tree
+
+Query Processor + Optimizer
+Process a given query to generate its computation graph
+You can use tools like bison & flex for this part
+Generate a plan (like psql or sqlite) and estimate the cost of the operation
+Perform basic optimizations as in Silberschatz
+LETS START, lets target to complete atleast generating relation algebra tree today
