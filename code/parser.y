@@ -1,54 +1,103 @@
 %{
-#include "parser.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "ast.h"
 
-void yyerror(const char *s);
-int yylex();
+extern int yylex();
+extern int yyparse();
+extern FILE* yyin;
+void yyerror(const char* s);
 
-Query *new_query(char *col, char *tbl, char *cond_col, int cond_val) {
-    Query *q = malloc(sizeof(Query));
-    q->column = col;
-    q->table = tbl;
-    q->condition_col = cond_col;
-    q->condition_val = cond_val;
-    return q;
-}
-
+AstNode* ast_root = NULL;
 %}
 
 %union {
-    char *str;
-    int num;
+    int intval;
+    char* strval;
+    struct AstNode* node;
+    struct ColumnList* col_list;
 }
 
-%token SELECT FROM WHERE GT SEMICOLON
-%token <str> IDENTIFIER
-%token <num> NUMBER
+%token <strval> IDENTIFIER
+%token <intval> NUMBER
+%token SELECT FROM WHERE JOIN ON AND OR COMMA
+%token EQ LT GT
 
-%type <str> column table condition_col
-%type <num> condition_val
+%type <node> query select_clause from_clause where_clause condition
+%type <node> table_ref join_clause
+%type <col_list> column_list
 
 %%
-
-query: SELECT column FROM table where_clause SEMICOLON
-    ;
-
-where_clause: WHERE condition_col GT condition_val
+query: select_clause from_clause where_clause
     {
-        query = new_query($<str>-4, $<str>-3, $2, $4);  // column, table from earlier
-    }
-    | /* empty */
-    {
-        query = new_query($<str>-2, $<str>-1, NULL, 0);  // No condition
+        $$ = create_query_node($1, $2, $3);
+        ast_root = $$;
     }
     ;
 
-column: IDENTIFIER { $$ = $1; }
-table: IDENTIFIER { $$ = $1; }
-condition_col: IDENTIFIER { $$ = $1; }
-condition_val: NUMBER { $$ = $1; }
+select_clause: SELECT column_list
+    {
+        $$ = create_select_node($2);
+    }
+    ;
+
+column_list: IDENTIFIER
+    {
+        $$ = create_column_list($1, NULL);
+    }
+    | IDENTIFIER COMMA column_list
+    {
+        $$ = create_column_list($1, $3);
+    }
+    ;
+
+from_clause: FROM table_ref
+    {
+        $$ = create_from_node($2);
+    }
+    ;
+
+table_ref: IDENTIFIER
+    {
+        $$ = create_table_node($1);
+    }
+    | table_ref JOIN IDENTIFIER ON condition
+    {
+        $$ = create_join_node($1, $3, $5);
+    }
+    ;
+
+where_clause: /* empty */
+    {
+        $$ = NULL;
+    }
+    | WHERE condition
+    {
+        $$ = create_where_node($2);
+    }
+    ;
+
+condition: IDENTIFIER EQ NUMBER
+    {
+        $$ = create_condition_node($1, "=", $3);
+    }
+    | IDENTIFIER EQ IDENTIFIER
+    {
+        $$ = create_eq_condition_node($1, $3);
+    }
+    | condition AND condition
+    {
+        $$ = create_and_condition_node($1, $3);
+    }
+    | condition OR condition
+    {
+        $$ = create_or_condition_node($1, $3);
+    }
+    ;
 
 %%
 
-void yyerror(const char *s) {
-    fprintf(stderr, "Error: %s\n", s);
+void yyerror(const char* s) {
+    fprintf(stderr, "Parse error: %s\n", s);
+    exit(1);
 }
