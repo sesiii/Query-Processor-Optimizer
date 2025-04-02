@@ -1,6 +1,8 @@
 #include "parser.h"
 #include "parser.tab.h"
 
+extern void yy_scan_string(const char *str);
+
 Node *root = NULL;
 
 Node *new_node(char *op, char *arg1, char *arg2) {
