@@ -48,8 +48,6 @@ from_clause: table_ref
     { $$ = $1; }
     | table_ref join_clause
     {
-        //$$ = $2;
-        //$$->child = $1;  // Table_ref as left child of join
         $$=$1;
         $$->child=$2->child;
         $2->child=NULL;
@@ -59,7 +57,7 @@ from_clause: table_ref
 
 table_ref: IDENTIFIER
     
-    { printf("%s\n",$1);
+    { //printf("%s\n",$1);
     $$ = new_node("table", $1, NULL); }
     ;
 
