@@ -30,8 +30,33 @@ void print_tree(Node *node, int depth) {
 }
 
 int main() {
-    printf("Parsing hardcoded query:SELECT a, b FROM table1 JOIN table2 ON table1.id = table2.id WHERE c > 5;\n");
-    yy_scan_string("SELECT a, b FROM table1 JOIN table2 ON table1.id = table2.id WHERE c > 5;");  // Hardcoded input
+    FILE *file = fopen("query.sql", "r");
+    if (!file) {
+        perror("Failed to open query.sql");
+        return 1;
+    }
+
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    if ((read = getline(&line, &len, file)) != -1) {
+        // Remove trailing newline character if present
+        if (line[read - 1] == '\n') {
+            line[read - 1] = '\0';
+        }
+
+        printf("Parsing query: %s\n", line);
+        yy_scan_string(line);
+    } else {
+        printf("No query found in query.sql\n");
+        free(line);
+        fclose(file);
+        return 1;
+    }
+
+    free(line);
+    fclose(file);
     yyparse();
 
     if (root) {
