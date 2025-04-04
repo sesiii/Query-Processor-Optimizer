@@ -1,13 +1,1 @@
-
-SELECT 
-    employee_id,
-    first_name,
-    last_name,
-    department,
-    salary
-FROM 
-    employees
-WHERE 
-    salary > 50000
-ORDER BY 
-    salary DESC;
+SELECT t1, i2 FROM employees JOIN salaries ON t1.emp_id = t2.emp_id WHERE t2.salary > 50000;
