@@ -12,6 +12,7 @@ Node *new_node(char *op, char *arg1, char *arg2) {
     n->arg2 = arg2 ? strdup(arg2) : NULL;
     n->child = NULL;
     n->next = NULL;
+    printf("\nCreated node: %s, %s, %s\n", n->operation, n->arg1, n->arg2);  // Debug
     return n;
 }
 
@@ -19,14 +20,12 @@ void print_tree(Node *node, int depth) {
     if (!node) return;
     for (int i = 0; i < depth; i++) printf("  ");
     if (node->arg1 && node->arg2)
-        printf("%s(%s AS %s)\n", node->operation, node->arg1, node->arg2);
+        printf("%s(%s, %s)\n", node->operation, node->arg1, node->arg2);
     else if (node->arg1)
         printf("%s(%s)\n", node->operation, node->arg1);
     else
         printf("%s\n", node->operation);
-    // Print child first (subquery or from_clause)
     print_tree(node->child, depth + 1);
-    // Then print next (siblings like join nodes)
     print_tree(node->next, depth);
 }
 
@@ -40,29 +39,29 @@ int main() {
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
+    int query_num = 1;
 
-    if ((read = getline(&line, &len, file)) != -1) {
+    while((read = getline(&line, &len, file)) != -1) {
+        // Remove trailing newline character if present
         if (line[read - 1] == '\n') {
             line[read - 1] = '\0';
         }
-        printf("Parsing query: %s\n", line);
+
+        printf("\n++++++++++++++++++++++++ Parsing query %d ++++++++++++++++++++++++++ : \n%s\n", query_num++,line);
         yy_scan_string(line);
-    } else {
-        printf("No query found in query.sql\n");
-        free(line);
-        fclose(file);
-        return 1;
-    }
+
+        root = NULL; //Reset root before each parse
+        yyparse();
+
+        if (root) {
+            printf("\nAbstract Syntax Tree:\n");
+            print_tree(root, 0);
+        } else {
+            printf("No AST generated for this query.\n");
+        }
+    } 
 
     free(line);
     fclose(file);
-    yyparse();
-
-    if (root) {
-        printf("\nAbstract Syntax Tree:\n");
-        print_tree(root, 0);
-    } else {
-        printf("No AST generated.\n");
-    }
     return 0;
 }
