@@ -92,6 +92,7 @@ int can_push_to_table(const char *condition, const char *table_name, Node *conte
         ColumnStats *stats = get_column_stats(table_name, column);
         if (stats) {
             result = 1;
+            printf("push down possible: column %s exists in table %s\n", column, table_name);
         }
     }
     
@@ -103,7 +104,51 @@ int can_push_to_table(const char *condition, const char *table_name, Node *conte
 }
 
 
-// Recursive function to push selection predicates down the tree
+// // Recursive function to push selection predicates down the tree
+// Node* push_down_selections(Node *node) {
+//     if (!node) return NULL;
+//     printf("Pushing down selections...%s\n", node->operation);
+
+//     if (node->operation && strcmp(node->operation, "σ") == 0) {
+//         Node *child = node->child;
+//         if (!child) return node;
+
+//         // Check if child is a table with a join sibling
+//         if (child->operation && strcmp(child->operation, "table") == 0 && 
+//             child->next && child->next->operation && strcmp(child->next->operation, "⨝") == 0) {
+//             Node *left_table = child;           // employees
+//             Node *join_node = child->next;      // ⨝
+//             Node *right_table = join_node->child; // salaries
+
+//             if (right_table && can_push_to_table(node->arg1, right_table->arg1, node)) {
+//                 printf("Pushing condition '%s' down to table '%s'\n", node->arg1, right_table->arg1);
+//                 Node *new_selection = new_node("σ", node->arg1, NULL);
+//                 new_selection->child = right_table;
+//                 join_node->child = new_selection;
+//                 left_table->next = join_node;
+//                 free(node->operation);
+//                 free(node->arg1);
+//                 free(node);
+//                 return left_table;
+//             } else if (left_table && can_push_to_table(node->arg1, left_table->arg1, node)) {
+//                 printf("Pushing condition '%s' down to table '%s'\n", node->arg1, left_table->arg1);
+//                 Node *new_selection = new_node("σ", node->arg1, NULL);
+//                 new_selection->child = left_table;
+//                 new_selection->next = join_node;
+//                 free(node->operation);
+//                 free(node->arg1);
+//                 free(node);
+//                 return new_selection;
+//             }
+//         }
+//     }
+    
+//     if (node->child) node->child = push_down_selections(node->child);
+//     if (node->next) node->next = push_down_selections(node->next);
+    
+//     return node;
+// }
+
 Node* push_down_selections(Node *node) {
     if (!node) return NULL;
     printf("Pushing down selections...%s\n", node->operation);
@@ -115,21 +160,47 @@ Node* push_down_selections(Node *node) {
         // Check if child is a table with a join sibling
         if (child->operation && strcmp(child->operation, "table") == 0 && 
             child->next && child->next->operation && strcmp(child->next->operation, "⨝") == 0) {
+            
             Node *left_table = child;           // employees
             Node *join_node = child->next;      // ⨝
-            Node *right_table = join_node->child; // salaries
+            Node *right_table = NULL;
+            
+            // Find the right table - it could be a child of the left table
+            if (left_table->child && left_table->child->operation && 
+                strcmp(left_table->child->operation, "table") == 0) {
+                right_table = left_table->child;  // salaries
+            } else if (join_node->child && join_node->child->operation && 
+                       strcmp(join_node->child->operation, "table") == 0) {
+                right_table = join_node->child;   // alternative structure
+            }
 
+            // Try to push to right table first
             if (right_table && can_push_to_table(node->arg1, right_table->arg1, node)) {
                 printf("Pushing condition '%s' down to table '%s'\n", node->arg1, right_table->arg1);
+                
+                // Create a new selection node for the right table
                 Node *new_selection = new_node("σ", node->arg1, NULL);
-                new_selection->child = right_table;
-                join_node->child = new_selection;
+                
+                // If right table is child of left table
+                if (left_table->child == right_table) {
+                    new_selection->child = right_table;
+                    left_table->child = new_selection;
+                } 
+                // If right table is child of join node
+                else if (join_node->child == right_table) {
+                    new_selection->child = right_table;
+                    join_node->child = new_selection;
+                }
+                
+                // Replace the original selection node with just the left table
                 left_table->next = join_node;
                 free(node->operation);
                 free(node->arg1);
                 free(node);
                 return left_table;
-            } else if (left_table && can_push_to_table(node->arg1, left_table->arg1, node)) {
+            } 
+            // Try to push to left table
+            else if (can_push_to_table(node->arg1, left_table->arg1, node)) {
                 printf("Pushing condition '%s' down to table '%s'\n", node->arg1, left_table->arg1);
                 Node *new_selection = new_node("σ", node->arg1, NULL);
                 new_selection->child = left_table;
