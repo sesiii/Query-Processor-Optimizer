@@ -1,1 +1,1 @@
-SELECT t1, t2 FROM employees JOIN salaries ON t1.emp_id = t2.emp_id WHERE salary > 50000;
+SELECT employees.name, salaries.salary FROM employees JOIN salaries ON employees.emp_id = salaries.emp_id WHERE salaries.salary > 50000;
