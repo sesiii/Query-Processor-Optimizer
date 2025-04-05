@@ -16,107 +16,200 @@ extern int yylineno;
     struct Node *node;
 }
 
-%token SELECT FROM WHERE JOIN INNER ON AND DOT
+%token SELECT FROM WHERE JOIN INNER ON AND DOT IN
+%token COUNT MAX MIN AVG
 %token EQ LT GT COMMA SEMICOLON LPAREN RPAREN
 %token <str> IDENTIFIER
 %token <num> NUMBER
 
-%type <node> query select_clause from_clause where_clause join_clause condition expr table_ref
-%type <str> column
+%type <node> query select_clause from_clause where_clause join_clause condition expr table_ref subquery
+%type <str> column column_item
 
 %%
 
 query: select_clause SEMICOLON
     { 
+        printf("Parsed query: %s\n", $1->arg1);
         root = $1;
     }
     ;
 
 select_clause: SELECT column FROM from_clause where_clause
     {
+        printf("SELECT clause: %s\n", $2);
         $$ = new_node("π", $2, NULL);  // Projection node
         if ($5) {                      // If WHERE exists
+            printf("WHERE clause exists\n");
             $5->child = $4;            // σ’s child is the from_clause
             $$->child = $5;            // π’s child is σ
         } else {
+            printf("No WHERE clause\n");
             $$->child = $4;            // π’s child is from_clause directly
         }
     }
     ;
 
+column: column_item
+    { 
+        printf("Column: %s\n", $1);
+        $$ = $1; 
+    }
+    | column COMMA column_item
+    {
+        char *combined = malloc(strlen($1) + strlen($3) + 2);
+        sprintf(combined, "%s,%s", $1, $3);
+        printf("Combined columns: %s\n", combined);
+        $$ = combined;
+    }
+    ;
+
+column_item: IDENTIFIER
+    { 
+        printf("Column item: %s\n", $1);
+        $$ = $1; 
+    }
+    | IDENTIFIER DOT IDENTIFIER
+    {
+        char combined[100];
+        sprintf(combined, "%s.%s", $1, $3);
+        printf("Column item with dot: %s\n", combined);
+        $$ = strdup(combined);
+    }
+    | COUNT LPAREN column_item RPAREN
+    {
+        char agg[100];
+        sprintf(agg, "COUNT(%s)", $3);
+        printf("Aggregate COUNT: %s\n", agg);
+        $$ = strdup(agg);
+    }
+    | MAX LPAREN column_item RPAREN
+    {
+        char agg[100];
+        sprintf(agg, "MAX(%s)", $3);
+        printf("Aggregate MAX: %s\n", agg);
+        $$ = strdup(agg);
+    }
+    | MIN LPAREN column_item RPAREN
+    {
+        char agg[100];
+        sprintf(agg, "MIN(%s)", $3);
+        printf("Aggregate MIN: %s\n", agg);
+        $$ = strdup(agg);
+    }
+    | AVG LPAREN column_item RPAREN
+    {
+        char agg[100];
+        sprintf(agg, "AVG(%s)", $3);
+        printf("Aggregate AVG: %s\n", agg);
+        $$ = strdup(agg);
+    }
+    ;
+
 from_clause: table_ref
-    { $$ = $1; }
+    { 
+        printf("From clause: %s\n", $1->arg1);
+        $$ = $1; 
+    }
     | table_ref join_clause
     {
-        $$=$1;
-        $$->child=$2->child;
-        $2->child=NULL;
-        $$->next=$2;
+        printf("From clause with join\n");
+        $$ = $1;
+        $$->child = $2->child;
+        $2->child = NULL;
+        $$->next = $2;
     }
     ;
 
 table_ref: IDENTIFIER
-    
-    { //printf("%s\n",$1);
-    $$ = new_node("table", $1, NULL); }
+    { 
+        printf("Table reference: %s\n", $1);
+        $$ = new_node("table", $1, NULL); 
+    }
+    | IDENTIFIER IDENTIFIER
+    {
+        printf("Table reference with alias: %s as %s\n", $1, $2);
+        $$ = new_node("table", $1, $2); // arg1 = table name, arg2 = alias
+    }
     ;
 
 join_clause: JOIN table_ref ON condition
     {
+        printf("Join clause: %s\n", $2->arg1);
         $$ = new_node("⨝", $4->arg1, NULL);  // Join node with condition as argument
-        $$->child = $2;// Right table as child
-                          
+        $$->child = $2;              // Right table as child
     }
     ;
 
 where_clause: WHERE condition
-    { $$ = new_node("σ", $2->arg1, NULL); }
+    { 
+        printf("Where clause: %s\n", $2->arg1);
+        $$ = new_node("σ", $2->arg1, NULL); 
+    }
     | /* empty */
-    { $$ = NULL; }
+    { 
+        printf("Empty where clause\n");
+        $$ = NULL; 
+    }
     ;
 
 condition: expr EQ expr
     {
         char cond[100];
         sprintf(cond, "%s = %s", $1->arg1, $3->arg1);
+        printf("Condition: %s\n", cond);
         $$ = new_node("cond", strdup(cond), NULL);
     }
     | expr LT expr
     {
         char cond[100];
         sprintf(cond, "%s < %s", $1->arg1, $3->arg1);
+        printf("Condition: %s\n", cond);
         $$ = new_node("cond", strdup(cond), NULL);
     }
     | expr GT expr
     {
         char cond[100];
         sprintf(cond, "%s > %s", $1->arg1, $3->arg1);
+        printf("Condition: %s\n", cond);
         $$ = new_node("cond", strdup(cond), NULL);
+    }
+    | expr IN LPAREN subquery RPAREN
+    {
+        char cond[100];
+        sprintf(cond, "%s IN (subquery)", $1->arg1);
+        printf("Condition with subquery: %s\n", cond);
+        $$ = new_node("cond", strdup(cond), NULL);
+        $$->child = $4; // Subquery as child
+    }
+    ;
+
+subquery: select_clause
+    { 
+        printf("Subquery\n");
+        $$ = $1; 
     }
     ;
 
 expr: IDENTIFIER
-    { $$ = new_node("expr", $1, NULL); }
+    { 
+        printf("Expression: %s\n", $1);
+        $$ = new_node("expr", $1, NULL); 
+    }
     | IDENTIFIER DOT IDENTIFIER
     {
         char combined[100];
         sprintf(combined, "%s.%s", $1, $3);
+        printf("Expression with dot: %s\n", combined);
         $$ = new_node("expr", strdup(combined), NULL);
     }
     | NUMBER
     {
         char num[20];
         sprintf(num, "%d", $1);
+        printf("Expression with number: %s\n", num);
         $$ = new_node("expr", strdup(num), NULL);
     }
-    
-
-column: IDENTIFIER { $$ = $1; }
-    | column COMMA IDENTIFIER { 
-        char *combined = malloc(strlen($1) + strlen($3) + 2);
-        sprintf(combined, "%s,%s", $1, $3);
-        $$ = combined;
-    }
+    ;
 
 %%
 
