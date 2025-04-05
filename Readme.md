@@ -70,7 +70,6 @@ WHERE salaries.salary > 50000;
 ├── main.c            # Driver program
 ├── stats.c           # Handles statistics and cost estimation
 ├── optimizer.c       # Query optimization logic (Selection push-down)
-├── ast.h/.c          # AST structure and visualization utilities
 ├── stage1_output.png # Sample AST visualization
 ├── stage2_output.png # Sample optimized execution plan visualization
 └── README.md         # This file
