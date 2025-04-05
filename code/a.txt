@@ -1,2 +1,0 @@
-select s from b where a>10;
-select insert updstre delete
