@@ -103,52 +103,6 @@ int can_push_to_table(const char *condition, const char *table_name, Node *conte
     return result;
 }
 
-
-// // Recursive function to push selection predicates down the tree
-// Node* push_down_selections(Node *node) {
-//     if (!node) return NULL;
-//     printf("Pushing down selections...%s\n", node->operation);
-
-//     if (node->operation && strcmp(node->operation, "σ") == 0) {
-//         Node *child = node->child;
-//         if (!child) return node;
-
-//         // Check if child is a table with a join sibling
-//         if (child->operation && strcmp(child->operation, "table") == 0 && 
-//             child->next && child->next->operation && strcmp(child->next->operation, "⨝") == 0) {
-//             Node *left_table = child;           // employees
-//             Node *join_node = child->next;      // ⨝
-//             Node *right_table = join_node->child; // salaries
-
-//             if (right_table && can_push_to_table(node->arg1, right_table->arg1, node)) {
-//                 printf("Pushing condition '%s' down to table '%s'\n", node->arg1, right_table->arg1);
-//                 Node *new_selection = new_node("σ", node->arg1, NULL);
-//                 new_selection->child = right_table;
-//                 join_node->child = new_selection;
-//                 left_table->next = join_node;
-//                 free(node->operation);
-//                 free(node->arg1);
-//                 free(node);
-//                 return left_table;
-//             } else if (left_table && can_push_to_table(node->arg1, left_table->arg1, node)) {
-//                 printf("Pushing condition '%s' down to table '%s'\n", node->arg1, left_table->arg1);
-//                 Node *new_selection = new_node("σ", node->arg1, NULL);
-//                 new_selection->child = left_table;
-//                 new_selection->next = join_node;
-//                 free(node->operation);
-//                 free(node->arg1);
-//                 free(node);
-//                 return new_selection;
-//             }
-//         }
-//     }
-    
-//     if (node->child) node->child = push_down_selections(node->child);
-//     if (node->next) node->next = push_down_selections(node->next);
-    
-//     return node;
-// }
-
 Node* push_down_selections(Node *node) {
     if (!node) return NULL;
     printf("Pushing down selections...%s\n", node->operation);
