@@ -10,3 +10,4 @@ SELECT name FROM employees e1 WHERE (SELECT COUNT(*) FROM employees e2 WHERE e2.
 SELECT name FROM departments WHERE id NOT IN (SELECT DISTINCT department_id FROM projects);
 
 hia
+\=aknbas
