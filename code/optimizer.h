@@ -17,7 +17,9 @@ Node* optimize_query(Node *root);
 
 // Helper functions
 Node* push_down_selections(Node *node);
+Node* push_down_projections(Node *node);
 Node* reorder_joins(Node *node);
+
 JoinOrderNode* find_optimal_join_order(Node *join_node);
 double estimate_cost(Node *node);
 
