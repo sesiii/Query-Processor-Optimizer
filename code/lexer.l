@@ -13,33 +13,41 @@ void count();
 %%
 [ \t\n\r]+      { /* Ignore whitespace */ }
 
-"SELECT"    { count(); return SELECT; }
-"FROM"      { count(); return FROM; }
-"WHERE"     { count(); return WHERE; }
-"JOIN"      { count(); return JOIN; }
-"INNER"     { count(); return INNER; }
-"ON"        { count(); return ON; }
-"AND"       { count(); return AND; }
-"."        { count(); return DOT; }
+"SELECT"    { printf("Matched: SELECT\n"); count(); return SELECT; }
+"FROM"      { printf("Matched: FROM\n"); count(); return FROM; }
+"WHERE"     { printf("Matched: WHERE\n"); count(); return WHERE; }
+"JOIN"      { printf("Matched: JOIN\n"); count(); return JOIN; }
+"INNER"     { printf("Matched: INNER\n"); count(); return INNER; }
+"ON"        { printf("Matched: ON\n"); count(); return ON; }
+"AND"       { printf("Matched: AND\n"); count(); return AND; }
+"IN"        { printf("Matched: IN\n"); count(); return IN; }
+"COUNT"     { printf("Matched: COUNT\n"); count(); return COUNT; }
+"MAX"       { printf("Matched: MAX\n"); count(); return MAX; }
+"MIN"       { printf("Matched: MIN\n"); count(); return MIN; }
+"AVG"       { printf("Matched: AVG\n"); count(); return AVG; }
+"."         { printf("Matched: DOT\n"); count(); return DOT; }
+
 [a-zA-Z_][a-zA-Z0-9_]* { 
+    printf("Matched IDENTIFIER: %s\n", yytext);
     count(); 
     yylval.str = strdup(yytext);
     return IDENTIFIER; 
 }
 
 [0-9]+(\.[0-9]+)? { 
+    printf("Matched NUMBER: %s\n", yytext);
     count(); 
     yylval.num = atoi(yytext);
     return NUMBER; 
 }
 
-"="         { count(); return EQ; }
-"<"         { count(); return LT; }
-">"         { count(); return GT; }
-","         { count(); return COMMA; }
-";"         { count(); return SEMICOLON; }
-"("         { count(); return LPAREN; }
-")"         { count(); return RPAREN; }
+"="         { printf("Matched: EQ\n"); count(); return EQ; }
+"<"         { printf("Matched: LT\n"); count(); return LT; }
+">"         { printf("Matched: GT\n"); count(); return GT; }
+","         { printf("Matched: COMMA\n"); count(); return COMMA; }
+";"         { printf("Matched: SEMICOLON\n"); count(); return SEMICOLON; }
+"("         { printf("Matched: LPAREN\n"); count(); return LPAREN; }
+")"         { printf("Matched: RPAREN\n"); count(); return RPAREN; }
 
 .           { printf("Unexpected character: %s\n", yytext); }
 
