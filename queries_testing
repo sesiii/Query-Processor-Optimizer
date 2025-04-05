@@ -8,3 +8,5 @@ SELECT e.name FROM employees e WHERE NOT EXISTS (SELECT * FROM projects p WHERE 
 SELECT d.name FROM departments d WHERE id = (SELECT department_id FROM (SELECT department_id, SUM(salary) AS total_salary FROM employees GROUP BY department_id ORDER BY total_salary DESC LIMIT 1) AS dept_salary);
 SELECT name FROM employees e1 WHERE (SELECT COUNT(*) FROM employees e2 WHERE e2.department_id = e1.department_id) = 1;
 SELECT name FROM departments WHERE id NOT IN (SELECT DISTINCT department_id FROM projects);
+
+hia
