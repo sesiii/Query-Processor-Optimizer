@@ -1,1 +1,0 @@
-select a.b,b.c from apple join bat where apple.salary>100;
