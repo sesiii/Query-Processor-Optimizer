@@ -1,0 +1,7 @@
+
+Abstract Syntax Tree:
+π(t1,t2)
+  σ(salary > 50000)
+    table(employees)
+      table(salaries)
+    ⨝(t1.emp_id = t2.emp_id)

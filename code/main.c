@@ -1,6 +1,6 @@
 #include "parser.h"
 #include "parser.tab.h"
-
+extern int yyparse(void);
 extern void yy_scan_string(const char *str);
 
 Node *root = NULL;
@@ -30,17 +30,17 @@ void print_tree(Node *node, int depth) {
     print_tree(node->next, depth);
 }
 
+
 int main() {
-    FILE *file = fopen("query.sql", "r");
+    FILE *file = fopen("temp/input.txt", "r");
     if (!file) {
-        perror("Failed to open query.sql");
+        perror("Failed to open temp/input.txt");
         return 1;
     }
 
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
-
     if ((read = getline(&line, &len, file)) != -1) {
         if (line[read - 1] == '\n') {
             line[read - 1] = '\0';
@@ -48,7 +48,7 @@ int main() {
         printf("Parsing query: %s\n", line);
         yy_scan_string(line);
     } else {
-        printf("No query found in query.sql\n");
+        printf("No query found in temp/input.txt\n");
         free(line);
         fclose(file);
         return 1;
@@ -56,13 +56,19 @@ int main() {
 
     free(line);
     fclose(file);
+    
+    // Redirect stdout to output file
+   
+    
     yyparse();
-
+     freopen("temp/output.txt", "w", stdout);
     if (root) {
         printf("\nAbstract Syntax Tree:\n");
         print_tree(root, 0);
     } else {
         printf("No AST generated.\n");
     }
+
     return 0;
 }
+
