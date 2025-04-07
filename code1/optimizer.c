@@ -6,8 +6,9 @@
 
 // Flag to enable/disable optimizations
 int enable_selection_pushdown = 1;
+int enable_projection_pushdown = 1;
 int enable_join_reordering = 0;
-int debugkaru = 0;
+int debugkaru =0;
 
 Node* optimize_query(Node *root) {
     if (!root) return NULL;
@@ -21,16 +22,20 @@ Node* optimize_query(Node *root) {
     init_stats();
     
     if (enable_selection_pushdown) {
-        // printf("Applying selection push-down...\n");
+        printf("Applying selection push-down...\n");
         root = push_down_selections(root);
         
-        // Print AST after selection push-down
         if(debugkaru) printf("\n[DEBUG] AST after selection push-down:\n");
         // print_ast(root, 0);
     }
-    
-    // printf("Applying projection push-down...\n");
-    // root = push_down_projections(root);
+
+    if (enable_projection_pushdown) {
+        printf("Applying projection push-down...\n");
+        root = push_down_projections(root);
+        
+        if(debugkaru) printf("\n[DEBUG] AST after projection push-down:\n");
+        // print_ast(root, 0);
+    }
     
     // Print AST after projection push-down
     if(debugkaru) printf("\n[DEBUG] AST after projection push-down:\n");
@@ -186,8 +191,7 @@ Node* push_down_selections(Node *node) {
                 join_node->child = new_selection;
                 new_selection->next = right_table;
                 
-                // Clean up original selection node
-                node->child = NULL;  // Prevent double free
+                node->child = NULL;  
                 free(node->operation);
                 free(node->arg1);
                 free(node);
@@ -347,7 +351,7 @@ void print_execution_plan_recursive(Node *node, int depth) {
             printf("table(%s)\n", node->arg1, estimate_cost(node));
     }
     else if (strcmp(node->operation, "σ") == 0) {
-        printf("σ(%s)\n", node->arg1, estimate_cost(node));
+        printf("σ(%s )\n", node->arg1, estimate_cost(node));
     }
     else if (strcmp(node->operation, "⨝") == 0) {
         printf("⨝(%s)\n", node->arg1, estimate_cost(node));
