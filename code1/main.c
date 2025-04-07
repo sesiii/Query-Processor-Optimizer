@@ -18,6 +18,31 @@ Node *new_node(char *op, char *arg1, char *arg2) {
     n->next = NULL;
     return n;
 }
+// void print_tree(Node *node, int depth) {
+//     if (!node) return;
+    
+//     // Print indentation
+//     for (int i = 0; i < depth; i++) printf("  ");
+    
+//     // Print current node
+//     if (node->arg1 && node->arg2)
+//         printf("%s(%s AS %s)\n", node->operation, node->arg1, node->arg2);
+//     else if (node->arg1)
+//         printf("%s(%s)\n", node->operation, node->arg1);
+//     else
+//         printf("%s\n", node->operation);
+    
+//     // Recursively print all children (assuming child is the left subtree)
+//     if (node->child) {
+//         print_tree(node->child, depth + 1);
+//     }
+    
+//     // Print siblings (assuming next is for additional children or nodes at the same level)
+//     if (node->next) {
+//         print_tree(node->next, depth + 1);  // Indent siblings as children
+//     }
+// }
+
 void print_tree(Node *node, int depth) {
     if (!node) return;
     
@@ -32,14 +57,36 @@ void print_tree(Node *node, int depth) {
     else
         printf("%s\n", node->operation);
     
-    // Recursively print all children (assuming child is the left subtree)
-    if (node->child) {
-        print_tree(node->child, depth + 1);
-    }
-    
-    // Print siblings (assuming next is for additional children or nodes at the same level)
-    if (node->next) {
-        print_tree(node->next, depth + 1);  // Indent siblings as children
+    // Handle special case for table with join next sibling
+    if (node->operation && strcmp(node->operation, "table") == 0 && 
+        node->next && node->next->operation && strcmp(node->next->operation, "⨝") == 0) {
+        
+        // Print join node
+        for (int i = 0; i < depth + 1; i++) printf("  ");
+        printf("%s(%s)\n", node->next->operation, node->next->arg1);
+        
+        // Print left table (current table)
+        for (int i = 0; i < depth + 2; i++) printf("  ");
+        printf("%s(%s)\n", node->operation, node->arg1);
+        
+        // Print right table (child of join node)
+        if (node->next->child) {
+            for (int i = 0; i < depth + 2; i++) printf("  ");
+            printf("%s(%s)\n", node->next->child->operation, node->next->child->arg1);
+        }
+        
+        // Skip normal child processing
+        if (node->next->next) {
+            print_tree(node->next->next, depth);
+        }
+    } else {
+        // Normal processing for other nodes
+        if (node->child) {
+            print_tree(node->child, depth + 1);
+        }
+        if (node->next) {
+            print_tree(node->next, depth);
+        }
     }
 }
 int main() {
