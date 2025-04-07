@@ -69,7 +69,7 @@ int main() {
     free(line);
     fclose(file);
     yyparse();
-
+    
     if (root) {
         printf("\nOriginal Abstract Syntax Tree:\n");
         print_tree(root, 0);
