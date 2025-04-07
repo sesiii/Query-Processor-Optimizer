@@ -22,7 +22,7 @@ Node* optimize_query(Node *root) {
     
     if (enable_selection_pushdown) {
         // printf("Applying selection push-down...\n");
-        root = push_down_selections(root);
+        // root = push_down_selections(root);
         
         // Print AST after selection push-down
         if(debugkaru) printf("\n[DEBUG] AST after selection push-down:\n");
@@ -30,7 +30,7 @@ Node* optimize_query(Node *root) {
     }
     
     // printf("Applying projection push-down...\n");
-    // root = push_down_projections(root);
+    root = push_down_projections(root);
     
     // Print AST after projection push-down
     if(debugkaru) printf("\n[DEBUG] AST after projection push-down:\n");
