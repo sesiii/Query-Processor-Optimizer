@@ -49,52 +49,7 @@ int main() {
         return 1;
     }
 
-    char *line = NULL;void print_tree(Node *node, int depth) {
-        if (!node) return;
-        
-        // Print indentation
-        for (int i = 0; i < depth; i++) printf("  ");
-        
-        // Print current node
-        if (node->arg1 && node->arg2)
-            printf("%s(%s AS %s)\n", node->operation, node->arg1, node->arg2);
-        else if (node->arg1)
-            printf("%s(%s)\n", node->operation, node->arg1);
-        else
-            printf("%s\n", node->operation);
-        
-        // Handle special case for table with join next sibling
-        if (node->operation && strcmp(node->operation, "table") == 0 && 
-            node->next && node->next->operation && strcmp(node->next->operation, "⨝") == 0) {
-            
-            // Print join node
-            for (int i = 0; i < depth + 1; i++) printf("  ");
-            printf("%s(%s)\n", node->next->operation, node->next->arg1);
-            
-            // Print left table (current table)
-            for (int i = 0; i < depth + 2; i++) printf("  ");
-            printf("%s(%s)\n", node->operation, node->arg1);
-            
-            // Print right table (child of current table)
-            if (node->child) {
-                for (int i = 0; i < depth + 2; i++) printf("  ");
-                printf("%s(%s)\n", node->child->operation, node->child->arg1);
-            }
-            
-            // Skip normal child processing
-            if (node->next && node->next->next) {
-                print_tree(node->next->next, depth);
-            }
-        } else {
-            // Normal processing for other nodes
-            if (node->child) {
-                print_tree(node->child, depth + 1);
-            }
-            if (node->next) {
-                print_tree(node->next, depth);
-            }
-        }
-    }
+    char *line = NULL;
     size_t len = 0;
     ssize_t read;
 
