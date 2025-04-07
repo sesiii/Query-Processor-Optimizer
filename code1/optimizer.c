@@ -16,7 +16,7 @@ Node* optimize_query(Node *root) {
     
     // Print initial AST
     if(debugkaru) printf("\n[DEBUG] Full AST before optimization:\n");
-    // print_ast(root, 0);
+    print_ast(root, 0);
     
     init_stats();
     
@@ -26,7 +26,7 @@ Node* optimize_query(Node *root) {
         
         // Print AST after selection push-down
         if(debugkaru) printf("\n[DEBUG] AST after selection push-down:\n");
-        // print_ast(root, 0);
+        print_ast(root, 0);
     }
     
     // printf("Applying projection push-down...\n");
@@ -34,7 +34,7 @@ Node* optimize_query(Node *root) {
     
     // Print AST after projection push-down
     if(debugkaru) printf("\n[DEBUG] AST after projection push-down:\n");
-    // print_ast(root, 0);
+    print_ast(root, 0);
     
     // if (enable_join_reordering) {
     //     printf("Applying join reordering...\n");
