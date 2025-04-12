@@ -25,12 +25,12 @@ Node* optimize_query(Node *root) {
     
     Node *optimized_root = root;
     if (enable_selection_pushdown) {
-        printf("Applying selection push-down...\n");
+        printf("\nApplying selection push-down...\n");
         optimized_root = push_down_selections(optimized_root);
     }
 
     if (enable_projection_pushdown) {
-        printf("Applying projection push-down...\n");
+        printf("\nApplying projection push-down...\n");
         optimized_root = push_down_projections(optimized_root);
     }
     
