@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "flexlexer.h": "c",
-        "limits": "c"
+        "limits": "c",
+        "stdio.h": "c"
     }
 }
