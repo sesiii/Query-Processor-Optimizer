@@ -7,8 +7,8 @@
 #include <ctype.h>
 
 // Flag to enable/disable optimizations
-int enable_selection_pushdown = 1;
-int enable_projection_pushdown = 0;
+int enable_selection_pushdown = 0;
+int enable_projection_pushdown = 1;
 int enable_join_reordering = 0;
 int debugkaru = 0;
 
@@ -429,6 +429,110 @@ Node* reorder_joins(Node *node) {
 //     return metrics;
 // }
 
+// CostMetrics estimate_cost(Node *node) {
+//     CostMetrics metrics = {0, 0.0, 0.0};
+    
+//     if (!node) return metrics;
+    
+//     if (strcmp(node->operation, "table") == 0) {
+//         TableStats *stats = get_table_stats(node->arg1);
+//         if (stats) {
+//             metrics.result_size = stats->row_count;
+//             // Base I/O cost for full table scan
+//             metrics.io_cost = stats->row_count * 1.0;
+//             // CPU cost proportional to row count
+//             metrics.cpu_cost = stats->row_count * 0.1;
+//         } else {
+//             metrics.result_size = 1000;
+//             metrics.io_cost = 1000.0;
+//             metrics.cpu_cost = 100.0;
+//         }
+//         return metrics;
+//     }
+    
+//     if (strcmp(node->operation, "σ") == 0) {
+//         CostMetrics child_metrics = estimate_cost(node->child);
+//         double selectivity = 0.1;
+        
+//         char *table = NULL, *column = NULL, *op = NULL;
+//         int value = 0;
+//         extract_condition_components(node->arg1, &table, &column, &op, &value);
+        
+//         if (table && column && op) {
+//             selectivity = calculate_condition_selectivity(table, column, op, value);
+//         } else if (column && op) {
+//             Node *current = node->child;
+//             while (current) {
+//                 if (current->operation && strcmp(current->operation, "table") == 0) {
+//                     if (get_column_stats(current->arg1, column)) {
+//                         selectivity = calculate_condition_selectivity(current->arg1, column, op, value);
+//                         break;
+//                     }
+//                 }
+//                 current = current->child ? current->child : current->next;
+//             }
+//         }
+        
+//         metrics.result_size = (int)(child_metrics.result_size * selectivity);
+//         // I/O cost remains same as child (selection doesn't add I/O)
+//         metrics.io_cost = child_metrics.io_cost;
+//         // CPU cost adds filtering cost (0.01 per row)
+//         metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.01;
+        
+//         if (table) free(table);
+//         if (column) free(column);
+//         if (op) free(op);
+//         return metrics;
+//     }
+    
+//     if (strcmp(node->operation, "⨝") == 0) {
+//         Node *left = node->child;
+//         Node *right = left ? left->next : NULL;
+        
+//         if (!left || !right) {
+//             return metrics;
+//         }
+
+//         CostMetrics left_metrics = estimate_cost(left);
+//         CostMetrics right_metrics = estimate_cost(right);
+        
+//         double selectivity = 0.0001; // Default selectivity
+        
+//         if (node->arg1) {
+//             char *left_table, *left_col, *right_table, *right_col;
+//             parse_join_condition(node->arg1, &left_table, &left_col, &right_table, &right_col);
+//             if (left_table && right_table && left_col && right_col) {
+//                 selectivity = calculate_join_selectivity(left_table, left_col, right_table, right_col);
+//             }
+//             if (left_table) free(left_table);
+//             if (left_col) free(left_col);
+//             if (right_table) free(right_table);
+//             if (right_col) free(right_col);
+//         }
+        
+//         metrics.result_size = (int)(left_metrics.result_size * right_metrics.result_size * selectivity);
+//         // I/O cost is sum of children's I/O
+//         metrics.io_cost = left_metrics.io_cost + right_metrics.io_cost;
+//         // CPU cost adds join processing (0.001 per potential pair)
+//         metrics.cpu_cost = left_metrics.cpu_cost + right_metrics.cpu_cost + 
+//                           (left_metrics.result_size * right_metrics.result_size * 0.001);
+        
+//         return metrics;
+//     }
+    
+//     if (strcmp(node->operation, "π") == 0) {
+//         CostMetrics child_metrics = estimate_cost(node->child);
+//         metrics.result_size = child_metrics.result_size;
+//         // I/O cost remains same as child (projection doesn't add I/O)
+//         metrics.io_cost = child_metrics.io_cost;
+//         // CPU cost adds projection cost (0.001 per row)
+//         metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.001;
+//         return metrics;
+//     }
+    
+//     return metrics;
+// }
+
 CostMetrics estimate_cost(Node *node) {
     CostMetrics metrics = {0, 0.0, 0.0};
     
@@ -438,14 +542,14 @@ CostMetrics estimate_cost(Node *node) {
         TableStats *stats = get_table_stats(node->arg1);
         if (stats) {
             metrics.result_size = stats->row_count;
-            // Base I/O cost for full table scan
-            metrics.io_cost = stats->row_count * 1.0;
-            // CPU cost proportional to row count
-            metrics.cpu_cost = stats->row_count * 0.1;
+            // Base I/O cost - full table scan
+            metrics.io_cost = stats->size_in_bytes / 1000.0; // Convert bytes to KB
+            // CPU cost - reading all rows
+            metrics.cpu_cost = stats->row_count * 0.001;
         } else {
             metrics.result_size = 1000;
             metrics.io_cost = 1000.0;
-            metrics.cpu_cost = 100.0;
+            metrics.cpu_cost = 1.0;
         }
         return metrics;
     }
@@ -474,10 +578,10 @@ CostMetrics estimate_cost(Node *node) {
         }
         
         metrics.result_size = (int)(child_metrics.result_size * selectivity);
-        // I/O cost remains same as child (selection doesn't add I/O)
+        // I/O cost remains same as child
         metrics.io_cost = child_metrics.io_cost;
-        // CPU cost adds filtering cost (0.01 per row)
-        metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.01;
+        // CPU cost adds filtering (0.0005 per input row)
+        metrics.cpu_cost = child_metrics.cpu_cost + (child_metrics.result_size * 0.0005);
         
         if (table) free(table);
         if (column) free(column);
@@ -511,11 +615,11 @@ CostMetrics estimate_cost(Node *node) {
         }
         
         metrics.result_size = (int)(left_metrics.result_size * right_metrics.result_size * selectivity);
-        // I/O cost is sum of children's I/O
+        // I/O cost is sum of children
         metrics.io_cost = left_metrics.io_cost + right_metrics.io_cost;
-        // CPU cost adds join processing (0.001 per potential pair)
+        // CPU cost adds join processing (0.00001 per potential pair)
         metrics.cpu_cost = left_metrics.cpu_cost + right_metrics.cpu_cost + 
-                          (left_metrics.result_size * right_metrics.result_size * 0.001);
+                          (left_metrics.result_size * right_metrics.result_size * 0.00001);
         
         return metrics;
     }
@@ -523,10 +627,24 @@ CostMetrics estimate_cost(Node *node) {
     if (strcmp(node->operation, "π") == 0) {
         CostMetrics child_metrics = estimate_cost(node->child);
         metrics.result_size = child_metrics.result_size;
-        // I/O cost remains same as child (projection doesn't add I/O)
-        metrics.io_cost = child_metrics.io_cost;
-        // CPU cost adds projection cost (0.001 per row)
-        metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.001;
+        
+        // Projection I/O cost depends on whether we're reading projected columns only
+        if (node->child && node->child->operation && strcmp(node->child->operation, "table") == 0) {
+            // If projecting directly from table, we can reduce I/O
+            TableStats *stats = get_table_stats(node->child->arg1);
+            if (stats) {
+                // Estimate 50% I/O reduction for projection (since we're reading fewer columns)
+                metrics.io_cost = stats->size_in_bytes / 1000.0 * 0.5;
+            } else {
+                metrics.io_cost = child_metrics.io_cost * 0.5;
+            }
+        } else {
+            // For intermediate projections, no I/O savings
+            metrics.io_cost = child_metrics.io_cost;
+        }
+        
+        // CPU cost adds projection (0.0001 per row)
+        metrics.cpu_cost = child_metrics.cpu_cost + (child_metrics.result_size * 0.0001);
         return metrics;
     }
     
