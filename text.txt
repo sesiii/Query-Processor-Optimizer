@@ -38,3 +38,97 @@ Week 4: April 14–15, 2025 (Finalization and Submission)
 
 
 we need to implemented cost based metrics to see if the optimization is atually effective(say it disk reads or simple no of i/o s), we need to show before and afteer optimization metrics that the optimization is correct. we are only implementding the [arser optimization for 3-4 queries, therefore we need to have stats about them in stats.h, also here is a rough idead about how we need to show cost , assume 2 tables on whivh we are operating, have total 10000 tupes, out of which only 100 match, so join operation will effective reduce to 100 tuples after selection/projection piushdowm, similarly, we need to have metric to evelaute the optimizations
+
+
+
+
+
+/////////////////////////////////
+Abstract
+Efficient query processing is a cornerstone of database management systems, balancing
+performance and resource utilization. This project aims to develop a query processor and
+optimizer that parses SQL-like queries, constructs computation graphs, generates execu-
+tion plans, and estimates operational costs. Leveraging Bison and Flex, we will build
+a parser to translate queries into a structured format. The system will then produce
+optimized execution plans, inspired by PostgreSQL and SQLite, incorporating basic op-
+timizations such as selection pushdown and join reordering, as outlined in Silberschatz et
+al.’s ”Database System Concepts.” Cost estimation will rely on simplified table statistics
+and operation complexity. By integrating systems-level tools with database theory, this
+project will deliver a functional prototype that demonstrates query transformation and
+cost-aware optimization within a constrained timeline.
+Weekly Work Plan
+Week 1: March 17–23, 2025 (Proposal Submission)
+• Finalize project scope and objectives.
+• Research query processing and optimization (Silberschatz Ch. 13–14).
+• Draft and submit proposal.
+• Set up Bison and Flex for SQL-like grammar.
+• Implement parser to generate abstract syntax tree (AST).
+1
+• Convert AST to basic computation graph for simple queries.
+Week 2: March 24–30, 2025 (Parser and Computation Graph)
+• Generate initial execution plans (e.g., relational algebra).
+• Develop basic cost estimation model (I/O and CPU costs).
+• Test with single-table and join queries.
+Week 3: March 31–April 6, 2025 (Execution Plan and Cost Estimation)
+• Implement selection pushdown and join reordering optimizations.
+• Compare costs of optimized vs. unoptimized plans.
+• Test with diverse queries and debug.
+Week 4: April 14–15, 2025 (Finalization and Submission)
+• Polish code and validate results.
+• Write final report and prepare demo.
+• Submit by April 15, 2025.
+
+pls go through the code, i have at a stage where a query is transformed into an ast, then execution plan is generated, then later an optimization is done, comparing of execustipon plans before and after optimizations.
+
+i am attaching output for a query for your reference
+dadi@RogStrix:~/Desktop/Query_Processor_Optimizer/code_1$ make
+flex lexer.l
+bison -d parser.y
+gcc lex.yy.c parser.tab.c main.c stats.c optimizer.c -o query_processor -lm
+./query_processor
+Parsing query: SELECT employees.name, salaries.salary FROM employees JOIN salaries ON employees.emp_id = salaries.emp_id WHERE salaries.salary > 50000;
+
+Original Abstract Syntax Tree:
+π(employees.name,salaries.salary)
+  σ(salaries.salary > 50000)
+    table(employees)
+      table(salaries)
+      ⨝(employees.emp_id = salaries.emp_id)
+
+Optimizing query...
+Initializing statistics with hardcoded values
+Statistics initialized for 4 tables
+
+Original Execution Plan:
+--- Original Plan ---
+π(employees.name,salaries.salary) [size=8333, io=10000.0, cpu=3416.7]
+  σ(salaries.salary > 50000) [size=8333, io=10000.0, cpu=3000.0]
+    table(employees) [size=10000, io=10000.0, cpu=1000.0]
+      table(salaries) [size=10000, io=10000.0, cpu=1000.0]
+    ⨝(employees.emp_id = salaries.emp_id) [size=0, io=0.0, cpu=0.0]
+
+Applying projection push-down...
+
+Optimized Execution Plan:
+--- Optimized Plan ---
+σ(salaries.salary > 50000) [size=8333, io=10000.0, cpu=6500.0]
+  π(employees.name,salaries.salary) [size=10000, io=10000.0, cpu=4500.0]
+    ⨝(employees.emp_id = salaries.emp_id) [size=10000, io=10000.0, cpu=4000.0]
+      π(employees.name,employees.emp_id) [size=10000, io=5000.0, cpu=1500.0]
+        table(employees) [size=10000, io=10000.0, cpu=1000.0]
+      π(salaries.salary,salaries.emp_id) [size=10000, io=5000.0, cpu=1500.0]
+        table(salaries) [size=10000, io=10000.0, cpu=1000.0]
+
+Cost Comparison:
+Metric          | Original      | Optimized     | Change
+----------------|---------------|---------------|----------------
+Result Size     | 8333          | 8333          | -0 (0.0%)
+I/O Cost        | 10000.0       | 10000.0       | -0.0 (0.0%)
+CPU Cost        | 3416.7        | 6500.0        | +3083.3 (90.2%)
+rm -f lex.yy.c parser.tab.c parser.tab.h query_processor
+
+
+
+but now, i am implementing an optimization as per my wish in the optimizer.c file, youll see in the initial part/
+
+what i want is, implenting both optimizations, compare both optimizations, and then showing the best optimization wrt cost
