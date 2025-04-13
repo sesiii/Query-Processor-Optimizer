@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "parser.h"
+#include "parser.hpp"
 
 void yyerror(const char *s);
 int yylex();
@@ -55,7 +55,7 @@ column: column_item
     }
     | column COMMA column_item
     {
-        char *combined = malloc(strlen($1) + strlen($3) + 2);
+        char *combined = (char *)malloc(strlen($1) + strlen($3) + 2);
         sprintf(combined, "%s,%s", $1, $3);
         if (debug) printf("Combined columns: %s\n", combined);
         $$ = combined;
