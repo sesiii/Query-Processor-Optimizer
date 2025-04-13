@@ -7,10 +7,81 @@
 #include <ctype.h>
 
 // Flag to enable/disable optimizations
-int enable_selection_pushdown = 0;
+int enable_selection_pushdown = 1;
 int enable_projection_pushdown = 1;
 int enable_join_reordering = 0;
 int debugkaru = 0;
+
+// Node* optimize_query(Node *root) {
+//     if (!root) return NULL;
+    
+//     printf("\nOptimizing query...\n");
+    
+//     init_stats();
+    
+//     printf("\nOriginal Execution Plan:\n");
+//     CostMetrics original_cost = estimate_cost(root);
+//     print_execution_plan(root, "Original Plan");
+    
+//     Node *optimized_root = root;
+//     if (enable_selection_pushdown) {
+//         printf("\nApplying selection push-down...\n");
+//         optimized_root = push_down_selections(optimized_root);
+//     }
+
+//     if (enable_projection_pushdown) {
+//         printf("\nApplying projection push-down...\n");
+//         optimized_root = push_down_projections(optimized_root);
+//     }
+    
+//     printf("\nOptimized Execution Plan:\n");
+//     CostMetrics optimized_cost = estimate_cost(optimized_root);
+//     print_execution_plan(optimized_root, "Optimized Plan");
+    
+//     printf("\nCost Comparison:\n");
+//     printf("Metric          | Original      | Optimized     | Change\n");
+//     printf("----------------|---------------|---------------|----------------\n");
+//     printf("Result Size     | %-13d | %-13d | %s%d (%.1f%%)\n",
+//            original_cost.result_size, optimized_cost.result_size,
+//            (optimized_cost.result_size <= original_cost.result_size) ? "-" : "+",
+//            abs(optimized_cost.result_size - original_cost.result_size),
+//            original_cost.result_size ? 
+//            (double)abs(optimized_cost.result_size - original_cost.result_size) / original_cost.result_size * 100 : 0.0);
+//     printf("I/O Cost        | %-13.1f | %-13.1f | %s%.1f (%.1f%%)\n",
+//            original_cost.io_cost, optimized_cost.io_cost,
+//            (optimized_cost.io_cost <= original_cost.io_cost) ? "-" : "+",
+//            fabs(optimized_cost.io_cost - original_cost.io_cost),
+//            original_cost.io_cost ? 
+//            fabs(optimized_cost.io_cost - original_cost.io_cost) / original_cost.io_cost * 100 : 0.0);
+//     printf("CPU Cost        | %-13.1f | %-13.1f | %s%.1f (%.1f%%)\n",
+//            original_cost.cpu_cost, optimized_cost.cpu_cost,
+//            (optimized_cost.cpu_cost <= original_cost.cpu_cost) ? "-" : "+",
+//            fabs(optimized_cost.cpu_cost - original_cost.cpu_cost),
+//            original_cost.cpu_cost ? 
+//            fabs(optimized_cost.cpu_cost - original_cost.cpu_cost) / original_cost.cpu_cost * 100 : 0.0);
+    
+//     return optimized_root;
+// }
+
+// Helper function to duplicate a node (deep copy)
+Node* duplicate_node(Node *node) {
+    if (!node) return NULL;
+    Node *new = new_node(node->operation, node->arg1, node->arg2);
+    new->child = duplicate_node(node->child);
+    new->next = duplicate_node(node->next);
+    return new;
+}
+
+// Helper function to free a node
+void free_node(Node *node) {
+    if (!node) return;
+    free_node(node->child);
+    free_node(node->next);
+    if (node->operation) free(node->operation);
+    if (node->arg1) free(node->arg1);
+    if (node->arg2) free(node->arg2);
+    free(node);
+}
 
 Node* optimize_query(Node *root) {
     if (!root) return NULL;
@@ -19,50 +90,94 @@ Node* optimize_query(Node *root) {
     
     init_stats();
     
+    // Compute original plan cost
     printf("\nOriginal Execution Plan:\n");
     CostMetrics original_cost = estimate_cost(root);
     print_execution_plan(root, "Original Plan");
     
-    Node *optimized_root = root;
+    // Store the original plan for multiple optimizations
+    Node *original_root = duplicate_node(root);
+    
+    // Plan 1: Selection pushdown
+    Node *selection_optimized = duplicate_node(original_root);
+    CostMetrics selection_cost = {0, 0.0, 0.0};
     if (enable_selection_pushdown) {
         printf("\nApplying selection push-down...\n");
-        optimized_root = push_down_selections(optimized_root);
+        selection_optimized = push_down_selections(selection_optimized);
+        selection_cost = estimate_cost(selection_optimized);
+        print_execution_plan(selection_optimized, "Selection Pushdown Plan");
+    } else {
+        selection_cost = original_cost; // No optimization applied
     }
-
+    
+    // Plan 2: Projection pushdown (reset to original)
+    Node *projection_optimized = duplicate_node(original_root);
+    CostMetrics projection_cost = {0, 0.0, 0.0};
     if (enable_projection_pushdown) {
         printf("\nApplying projection push-down...\n");
-        optimized_root = push_down_projections(optimized_root);
+        projection_optimized = push_down_projections(projection_optimized);
+        projection_cost = estimate_cost(projection_optimized);
+        print_execution_plan(projection_optimized, "Projection Pushdown Plan");
+    } else {
+        projection_cost = original_cost; // No optimization applied
     }
     
-    printf("\nOptimized Execution Plan:\n");
-    CostMetrics optimized_cost = estimate_cost(optimized_root);
-    print_execution_plan(optimized_root, "Optimized Plan");
+    // Determine the best plan based on total cost (I/O + CPU)
+    double original_total = original_cost.io_cost ;
+    double selection_total = selection_cost.io_cost ;
+    double projection_total = projection_cost.io_cost ;
     
+    Node *best_plan = root; // Default to original
+    CostMetrics best_cost = original_cost;
+    const char *best_plan_name = "Original";
+    double best_total = original_total;
+    
+    if (selection_total <= best_total) {
+        best_plan = selection_optimized;
+        best_cost = selection_cost;
+        best_plan_name = "Selection Pushdown";
+        best_total = selection_total;
+    } else {
+        free_node(selection_optimized); // Free if not selected
+    }
+    
+    if (projection_total <= best_total) {
+        if (best_plan != root) free_node(best_plan); // Free previous best if not original
+        best_plan = projection_optimized;
+        best_cost = projection_cost;
+        best_plan_name = "Projection Pushdown";
+        best_total = projection_total;
+    } else {
+        free_node(projection_optimized); // Free if not selected
+    }
+    
+    // Free the duplicated original if not selected
+    if (best_plan != root) {
+        free_node(original_root);
+    }
+    
+    // Print cost comparison
     printf("\nCost Comparison:\n");
-    printf("Metric          | Original      | Optimized     | Change\n");
-    printf("----------------|---------------|---------------|----------------\n");
-    printf("Result Size     | %-13d | %-13d | %s%d (%.1f%%)\n",
-           original_cost.result_size, optimized_cost.result_size,
-           (optimized_cost.result_size <= original_cost.result_size) ? "-" : "+",
-           abs(optimized_cost.result_size - original_cost.result_size),
-           original_cost.result_size ? 
-           (double)abs(optimized_cost.result_size - original_cost.result_size) / original_cost.result_size * 100 : 0.0);
-    printf("I/O Cost        | %-13.1f | %-13.1f | %s%.1f (%.1f%%)\n",
-           original_cost.io_cost, optimized_cost.io_cost,
-           (optimized_cost.io_cost <= original_cost.io_cost) ? "-" : "+",
-           fabs(optimized_cost.io_cost - original_cost.io_cost),
-           original_cost.io_cost ? 
-           fabs(optimized_cost.io_cost - original_cost.io_cost) / original_cost.io_cost * 100 : 0.0);
-    printf("CPU Cost        | %-13.1f | %-13.1f | %s%.1f (%.1f%%)\n",
-           original_cost.cpu_cost, optimized_cost.cpu_cost,
-           (optimized_cost.cpu_cost <= original_cost.cpu_cost) ? "-" : "+",
-           fabs(optimized_cost.cpu_cost - original_cost.cpu_cost),
-           original_cost.cpu_cost ? 
-           fabs(optimized_cost.cpu_cost - original_cost.cpu_cost) / original_cost.cpu_cost * 100 : 0.0);
+    printf("Metric          | Original      | Selection pushdown     | Projection pushdown    |\n");
+    printf("----------------|---------------|------------------------|------------------------|\n");
+    printf("Result Size     | %-13d | %-22d | %-22d | \n",
+           original_cost.result_size, selection_cost.result_size, projection_cost.result_size);
+    printf("I/O Cost        | %-13.1f | %-22f | %-22f | \n",
+           original_cost.io_cost, selection_cost.io_cost, projection_cost.io_cost);
+    // printf("CPU Cost        | %-13.1f | %-13.1f | %-13.1f | %s\n",
+    //        original_cost.cpu_cost, selection_cost.cpu_cost, projection_cost.cpu_cost,
+    //        best_plan_name);
+    printf("Total Cost      | %-13.1f | %-22f | %-22f | \n",
+           original_total, selection_total, projection_total);
     
-    return optimized_root;
+    // Print the best plan
+    printf("\nSelected Best Execution Plan (%s):\n", best_plan_name);
+    print_execution_plan(best_plan, "Best Plan");
+    
+    return best_plan;
 }
 
+// ... (rest of the file remains unchanged)
 void extract_table_column(const char *expr, char **table, char **column) {
     char *expr_copy = strdup(expr);
     char *start = expr_copy;
@@ -281,377 +396,6 @@ Node* reorder_joins(Node *node) {
     return node;
 }
 
-// CostMetrics estimate_cost(Node *node) {
-//     CostMetrics metrics = {0, 0.0, 0.0};
-    
-//     if (!node) return metrics;
-    
-//     if (strcmp(node->operation, "table") == 0) {
-//         TableStats *stats = get_table_stats(node->arg1);
-//         if (stats) {
-//             metrics.result_size = stats->row_count;
-//             metrics.io_cost = stats->row_count * 1.0;
-//             metrics.cpu_cost = 0.0;
-//         } else {
-//             metrics.result_size = 1000;
-//             metrics.io_cost = 1000.0;
-//             metrics.cpu_cost = 0.0;
-//         }
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "σ") == 0) {
-//         CostMetrics child_metrics = estimate_cost(node->child);
-//         double selectivity = 0.1;
-        
-//         char *table = NULL, *column = NULL, *op = NULL;
-//         int value = 0;
-//         extract_condition_components(node->arg1, &table, &column, &op, &value);
-        
-//         if (table && column && op) {
-//             selectivity = calculate_condition_selectivity(table, column, op, value);
-//             if (debugkaru) printf("Selection %s.%s %s %d: selectivity=%f\n", 
-//                                  table, column, op, value, selectivity);
-//         } else if (column && op) {
-//             Node *current = node->child;
-//             while (current) {
-//                 if (current->operation && strcmp(current->operation, "table") == 0) {
-//                     if (get_column_stats(current->arg1, column)) {
-//                         selectivity = calculate_condition_selectivity(current->arg1, column, op, value);
-//                         if (debugkaru) printf("Selection %s.%s %s %d: selectivity=%f\n", 
-//                                              current->arg1, column, op, value, selectivity);
-//                         break;
-//                     }
-//                 }
-//                 current = current->child ? current->child : current->next;
-//             }
-//         }
-        
-//         metrics.result_size = (int)(child_metrics.result_size * selectivity);
-//         metrics.io_cost = child_metrics.io_cost;
-//         metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.01;
-        
-//         if (table) free(table);
-//         if (column) free(column);
-//         if (op) free(op);
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "⨝") == 0) {
-//         Node *left_table = node->child;
-//         Node *right_table = NULL;
-        
-//         if (left_table && left_table->next) {
-//             right_table = left_table->next;
-//         } else if (left_table && left_table->child && 
-//                    left_table->child->operation && strcmp(left_table->child->operation, "table") == 0) {
-//             right_table = left_table->child;
-//             left_table = node->child;
-//         }
-        
-//         if (!left_table || !right_table) {
-//             if (debugkaru) printf("Join missing inputs: left=%p, right=%p\n", left_table, right_table);
-//             return metrics;
-//         }
-        
-//         CostMetrics left_metrics = estimate_cost(left_table);
-//         CostMetrics right_metrics = estimate_cost(right_table);
-        
-//         const char *left_name = NULL;
-//         if (left_table->operation && strcmp(left_table->operation, "table") == 0) {
-//             left_name = left_table->arg1;
-//         } else if (left_table->operation && strcmp(left_table->operation, "σ") == 0) {
-//             Node *current = left_table->child;
-//             while (current && current->operation && strcmp(current->operation, "table") != 0) {
-//                 current = current->child;
-//             }
-//             left_name = current ? current->arg1 : NULL;
-//         }
-        
-//         const char *right_name = NULL;
-//         if (right_table->operation && strcmp(right_table->operation, "table") == 0) {
-//             right_name = right_table->arg1;
-//         } else if (right_table->operation && strcmp(right_table->operation, "σ") == 0) {
-//             Node *current = right_table->child;
-//             while (current && current->operation && strcmp(current->operation, "table") != 0) {
-//                 current = current->child;
-//             }
-//             right_name = current ? current->arg1 : NULL;
-//         }
-        
-//         double selectivity = 0.0001; // Default based on primary key
-//         if (node->arg1 && left_name && right_name) {
-//             char *left_table_name, *left_col, *right_table_name, *right_col;
-//             parse_join_condition(node->arg1, &left_table_name, &left_col, &right_table_name, &right_col);
-//             if (left_table_name && right_table_name && left_col && right_col) {
-//                 double sel = calculate_join_selectivity(left_table_name, left_col, right_table_name, right_col);
-//                 if (sel > 0.0 && sel < 1.0) {
-//                     selectivity = sel;
-//                 } else {
-//                     TableStats *left_stats = get_table_stats(left_name);
-//                     TableStats *right_stats = get_table_stats(right_name);
-//                     selectivity = 1.0 / fmax(left_stats ? left_stats->row_count : 1000, 
-//                                            right_stats ? right_stats->row_count : 1000);
-//                     if (debugkaru) printf("Default selectivity for %s.%s = %s.%s: %f\n", 
-//                                          left_table_name, left_col, right_table_name, right_col, selectivity);
-//                 }
-//             } else {
-//                 if (debugkaru) printf("Failed to parse join condition: %s\n", node->arg1);
-//             }
-//             if (left_table_name) free(left_table_name);
-//             if (left_col) free(left_col);
-//             if (right_table_name) free(right_table_name);
-//             if (right_col) free(right_col);
-//         }
-        
-//         metrics.result_size = (int)(left_metrics.result_size * right_metrics.result_size * selectivity);
-//         metrics.io_cost = left_metrics.io_cost + right_metrics.io_cost;
-//         metrics.cpu_cost = left_metrics.cpu_cost + right_metrics.cpu_cost + 
-//                           (left_metrics.result_size * right_metrics.result_size * 0.01);
-        
-//         if (debugkaru) {
-//             printf("Join cost: size=%d, io=%.1f, cpu=%.1f (left_size=%d, right_size=%d, sel=%f)\n",
-//                    metrics.result_size, metrics.io_cost, metrics.cpu_cost,
-//                    left_metrics.result_size, right_metrics.result_size, selectivity);
-//         }
-        
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "π") == 0) {
-//         CostMetrics child_metrics = estimate_cost(node->child);
-//         metrics.result_size = child_metrics.result_size;
-//         metrics.io_cost = child_metrics.io_cost;
-//         metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.005;
-//         return metrics;
-//     }
-    
-//     return metrics;
-// }
-
-// CostMetrics estimate_cost(Node *node) {
-//     CostMetrics metrics = {0, 0.0, 0.0};
-    
-//     if (!node) return metrics;
-    
-//     if (strcmp(node->operation, "table") == 0) {
-//         TableStats *stats = get_table_stats(node->arg1);
-//         if (stats) {
-//             metrics.result_size = stats->row_count;
-//             // Base I/O cost for full table scan
-//             metrics.io_cost = stats->row_count * 1.0;
-//             // CPU cost proportional to row count
-//             metrics.cpu_cost = stats->row_count * 0.1;
-//         } else {
-//             metrics.result_size = 1000;
-//             metrics.io_cost = 1000.0;
-//             metrics.cpu_cost = 100.0;
-//         }
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "σ") == 0) {
-//         CostMetrics child_metrics = estimate_cost(node->child);
-//         double selectivity = 0.1;
-        
-//         char *table = NULL, *column = NULL, *op = NULL;
-//         int value = 0;
-//         extract_condition_components(node->arg1, &table, &column, &op, &value);
-        
-//         if (table && column && op) {
-//             selectivity = calculate_condition_selectivity(table, column, op, value);
-//         } else if (column && op) {
-//             Node *current = node->child;
-//             while (current) {
-//                 if (current->operation && strcmp(current->operation, "table") == 0) {
-//                     if (get_column_stats(current->arg1, column)) {
-//                         selectivity = calculate_condition_selectivity(current->arg1, column, op, value);
-//                         break;
-//                     }
-//                 }
-//                 current = current->child ? current->child : current->next;
-//             }
-//         }
-        
-//         metrics.result_size = (int)(child_metrics.result_size * selectivity);
-//         // I/O cost remains same as child (selection doesn't add I/O)
-//         metrics.io_cost = child_metrics.io_cost;
-//         // CPU cost adds filtering cost (0.01 per row)
-//         metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.01;
-        
-//         if (table) free(table);
-//         if (column) free(column);
-//         if (op) free(op);
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "⨝") == 0) {
-//         Node *left = node->child;
-//         Node *right = left ? left->next : NULL;
-        
-//         if (!left || !right) {
-//             return metrics;
-//         }
-
-//         CostMetrics left_metrics = estimate_cost(left);
-//         CostMetrics right_metrics = estimate_cost(right);
-        
-//         double selectivity = 0.0001; // Default selectivity
-        
-//         if (node->arg1) {
-//             char *left_table, *left_col, *right_table, *right_col;
-//             parse_join_condition(node->arg1, &left_table, &left_col, &right_table, &right_col);
-//             if (left_table && right_table && left_col && right_col) {
-//                 selectivity = calculate_join_selectivity(left_table, left_col, right_table, right_col);
-//             }
-//             if (left_table) free(left_table);
-//             if (left_col) free(left_col);
-//             if (right_table) free(right_table);
-//             if (right_col) free(right_col);
-//         }
-        
-//         metrics.result_size = (int)(left_metrics.result_size * right_metrics.result_size * selectivity);
-//         // I/O cost is sum of children's I/O
-//         metrics.io_cost = left_metrics.io_cost + right_metrics.io_cost;
-//         // CPU cost adds join processing (0.001 per potential pair)
-//         metrics.cpu_cost = left_metrics.cpu_cost + right_metrics.cpu_cost + 
-//                           (left_metrics.result_size * right_metrics.result_size * 0.001);
-        
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "π") == 0) {
-//         CostMetrics child_metrics = estimate_cost(node->child);
-//         metrics.result_size = child_metrics.result_size;
-//         // I/O cost remains same as child (projection doesn't add I/O)
-//         metrics.io_cost = child_metrics.io_cost;
-//         // CPU cost adds projection cost (0.001 per row)
-//         metrics.cpu_cost = child_metrics.cpu_cost + child_metrics.result_size * 0.001;
-//         return metrics;
-//     }
-    
-//     return metrics;
-// }
-
-// CostMetrics estimate_cost(Node *node) {
-//     CostMetrics metrics = {0, 0.0, 0.0};
-    
-//     if (!node) return metrics;
-    
-//     if (strcmp(node->operation, "table") == 0) {
-//         TableStats *stats = get_table_stats(node->arg1);
-//         if (stats) {
-//             metrics.result_size = stats->row_count;
-//             // Base I/O cost - full table scan
-//             metrics.io_cost = stats->size_in_bytes / 1000.0; // Convert bytes to KB
-//             // CPU cost - reading all rows
-//             metrics.cpu_cost = stats->row_count * 0.001;
-//         } else {
-//             metrics.result_size = 1000;
-//             metrics.io_cost = 1000.0;
-//             metrics.cpu_cost = 1.0;
-//         }
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "σ") == 0) {
-//         CostMetrics child_metrics = estimate_cost(node->child);
-//         double selectivity = 0.1;
-        
-//         char *table = NULL, *column = NULL, *op = NULL;
-//         int value = 0;
-//         extract_condition_components(node->arg1, &table, &column, &op, &value);
-        
-//         if (table && column && op) {
-//             selectivity = calculate_condition_selectivity(table, column, op, value);
-//         } else if (column && op) {
-//             Node *current = node->child;
-//             while (current) {
-//                 if (current->operation && strcmp(current->operation, "table") == 0) {
-//                     if (get_column_stats(current->arg1, column)) {
-//                         selectivity = calculate_condition_selectivity(current->arg1, column, op, value);
-//                         break;
-//                     }
-//                 }
-//                 current = current->child ? current->child : current->next;
-//             }
-//         }
-        
-//         metrics.result_size = (int)(child_metrics.result_size * selectivity);
-//         // I/O cost remains same as child
-//         metrics.io_cost = child_metrics.io_cost;
-//         // CPU cost adds filtering (0.0005 per input row)
-//         metrics.cpu_cost = child_metrics.cpu_cost + (child_metrics.result_size * 0.0005);
-        
-//         if (table) free(table);
-//         if (column) free(column);
-//         if (op) free(op);
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "⨝") == 0) {
-//         Node *left = node->child;
-//         Node *right = left ? left->next : NULL;
-        
-//         if (!left || !right) {
-//             return metrics;
-//         }
-
-//         CostMetrics left_metrics = estimate_cost(left);
-//         CostMetrics right_metrics = estimate_cost(right);
-        
-//         double selectivity = 0.0001; // Default selectivity
-        
-//         if (node->arg1) {
-//             char *left_table, *left_col, *right_table, *right_col;
-//             parse_join_condition(node->arg1, &left_table, &left_col, &right_table, &right_col);
-//             if (left_table && right_table && left_col && right_col) {
-//                 selectivity = calculate_join_selectivity(left_table, left_col, right_table, right_col);
-//             }
-//             if (left_table) free(left_table);
-//             if (left_col) free(left_col);
-//             if (right_table) free(right_table);
-//             if (right_col) free(right_col);
-//         }
-        
-//         metrics.result_size = (int)(left_metrics.result_size * right_metrics.result_size * selectivity);
-//         // I/O cost is sum of children
-//         metrics.io_cost = left_metrics.io_cost + right_metrics.io_cost;
-//         // CPU cost adds join processing (0.00001 per potential pair)
-//         metrics.cpu_cost = left_metrics.cpu_cost + right_metrics.cpu_cost + 
-//                           (left_metrics.result_size * right_metrics.result_size * 0.00001);
-        
-//         return metrics;
-//     }
-    
-//     if (strcmp(node->operation, "π") == 0) {
-//         CostMetrics child_metrics = estimate_cost(node->child);
-//         metrics.result_size = child_metrics.result_size;
-        
-//         // Projection I/O cost depends on whether we're reading projected columns only
-//         if (node->child && node->child->operation && strcmp(node->child->operation, "table") == 0) {
-//             // If projecting directly from table, we can reduce I/O
-//             TableStats *stats = get_table_stats(node->child->arg1);
-//             if (stats) {
-//                 // Estimate 50% I/O reduction for projection (since we're reading fewer columns)
-//                 metrics.io_cost = stats->size_in_bytes / 1000.0 * 0.5;
-//             } else {
-//                 metrics.io_cost = child_metrics.io_cost * 0.5;
-//             }
-//         } else {
-//             // For intermediate projections, no I/O savings
-//             metrics.io_cost = child_metrics.io_cost;
-//         }
-        
-//         // CPU cost adds projection (0.0001 per row)
-//         metrics.cpu_cost = child_metrics.cpu_cost + (child_metrics.result_size * 0.0001);
-//         return metrics;
-//     }
-    
-//     return metrics;
-// }
-
-
 // Helper function to check if a node is a table scan
 static int is_table_scan(Node *node) {
     return node && node->operation && strcmp(node->operation, "table") == 0;
@@ -717,7 +461,7 @@ CostMetrics estimate_cost(Node *node) {
         TableStats *stats = get_table_stats(node->arg1);
         metrics.result_size = stats ? stats->row_count : 1000;
         metrics.io_cost = metrics.result_size * 1.0;  // 1 unit per row
-        metrics.cpu_cost = metrics.result_size * 0.1; // 0.1 units per row
+        // metrics.cpu_cost = metrics.result_size * 0.1; // 0.1 units per row
         return metrics;
     }
 
@@ -727,7 +471,7 @@ CostMetrics estimate_cost(Node *node) {
         
         metrics.result_size = (int)(child.result_size * selectivity);
         metrics.io_cost = child.io_cost;
-        metrics.cpu_cost = child.cpu_cost + (child.result_size * 0.2);
+        // metrics.cpu_cost = child.cpu_cost + (child.result_size * 0.2);
         return metrics;
     }
 
@@ -740,7 +484,7 @@ CostMetrics estimate_cost(Node *node) {
         
         metrics.result_size = (int)(left.result_size * right.result_size * selectivity);
         metrics.io_cost = left.io_cost + right.io_cost;
-        metrics.cpu_cost = left.cpu_cost + right.cpu_cost + (metrics.result_size * 0.1);
+        // metrics.cpu_cost = left.cpu_cost + right.cpu_cost + (metrics.result_size * 0.1);
         return metrics;
     }
 
@@ -754,7 +498,7 @@ CostMetrics estimate_cost(Node *node) {
             metrics.io_cost = child.io_cost;
         }
         
-        metrics.cpu_cost = child.cpu_cost + (child.result_size * 0.05);
+        // metrics.cpu_cost = child.cpu_cost + (child.result_size * 0.05);
         return metrics;
     }
 
@@ -768,27 +512,27 @@ void print_execution_plan_recursive(Node *node, int depth) {
     CostMetrics metrics = estimate_cost(node);
     
     if (strcmp(node->operation, "table") == 0) {
-        printf("table(%s) [size=%d, io=%.1f, cpu=%.1f]\n", 
-               node->arg1, metrics.result_size, metrics.io_cost, metrics.cpu_cost);
+        printf("table(%s) [size=%d, io=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.io_cost);
     }
     else if (strcmp(node->operation, "σ") == 0) {
-        printf("σ(%s) [size=%d, io=%.1f, cpu=%.1f]\n", 
-               node->arg1, metrics.result_size, metrics.io_cost, metrics.cpu_cost);
+        printf("σ(%s) [size=%d, io=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.io_cost );
     }
     else if (strcmp(node->operation, "⨝") == 0) {
-        printf("⨝(%s) [size=%d, io=%.1f, cpu=%.1f]\n", 
-               node->arg1, metrics.result_size, metrics.io_cost, metrics.cpu_cost);
+        printf("⨝(%s) [size=%d, io=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.io_cost);
     }
     else if (strcmp(node->operation, "π") == 0) {
-        printf("π(%s) [size=%d, io=%.1f, cpu=%.1f]\n", 
-               node->arg1, metrics.result_size, metrics.io_cost, metrics.cpu_cost);
+        printf("π(%s) [size=%d, io=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.io_cost);
     }
     else {
-        printf("%s %s %s [size=%d, io=%.1f, cpu=%.1f]\n", 
+        printf("%s %s %s [size=%d, io=%.1f]\n", 
                node->operation, 
                node->arg1 ? node->arg1 : "", 
                node->arg2 ? node->arg2 : "", 
-               metrics.result_size, metrics.io_cost, metrics.cpu_cost);
+               metrics.result_size, metrics.io_cost);
     }
     
     print_execution_plan_recursive(node->child, depth + 1);
