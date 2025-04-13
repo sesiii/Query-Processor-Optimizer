@@ -206,18 +206,78 @@ static double get_join_selectivity(Node *node) {
     return selectivity;
 }
 
+// double calculate_total_plan_cost(Node *node) {
+//     if (!node) return 0.0;
+    
+//     CostMetrics current = estimate_cost(node);
+//     double child_cost = calculate_total_plan_cost(node->child);
+//     double next_cost = calculate_total_plan_cost(node->next);
+    
+//     if (debugkaru) printf("[DEBUG] Total cost for node %s: current=%.1f, child=%.1f, next=%.1f\n",
+//                          node->operation, current.cost, child_cost, next_cost);
+    
+//     return current.cost + child_cost + next_cost;
+// }
+
+
 double calculate_total_plan_cost(Node *node) {
     if (!node) return 0.0;
     
+    // Use a different approach for calculating the total cost of a plan
+    // Focus on the data flow through the tree rather than summing individual costs
+    
+    // First, get the cost metrics for this node
     CostMetrics current = estimate_cost(node);
-    double child_cost = calculate_total_plan_cost(node->child);
-    double next_cost = calculate_total_plan_cost(node->next);
     
-    if (debugkaru) printf("[DEBUG] Total cost for node %s: current=%.1f, child=%.1f, next=%.1f\n",
-                         node->operation, current.cost, child_cost, next_cost);
+    // For leaf nodes (tables), use their base cost
+    if (strcmp(node->operation, "table") == 0) {
+        return current.cost;
+    }
     
-    return current.cost + child_cost + next_cost;
+    // For selection, consider the reduction in data processing
+    if (strcmp(node->operation, "σ") == 0) {
+        double child_cost = calculate_total_plan_cost(node->child);
+        double selectivity = get_condition_selectivity(node);
+        // Selection cost is the cost of processing the input plus processing the reduced output
+        return child_cost * (1.0 + selectivity);
+    }
+    
+    // For join, consider the cost of processing both inputs plus producing the join result
+    if (strcmp(node->operation, "⨝") == 0) {
+        if (!node->child || !node->child->next) return current.cost;
+        
+        double left_cost = calculate_total_plan_cost(node->child);
+        double right_cost = calculate_total_plan_cost(node->child->next);
+        double selectivity = get_join_selectivity(node);
+        
+        // Join cost includes processing both inputs plus the join operation itself
+        // For early filtering, this will be much lower than late filtering
+        return left_cost + right_cost + (current.result_size * current.num_columns * 0.1);
+    }
+    
+    // For projection, consider the cost of the child plus the projection operation
+    // which should be cheaper when pushed down (fewer columns to project)
+    if (strcmp(node->operation, "π") == 0) {
+        double child_cost = calculate_total_plan_cost(node->child);
+        // Projection cost is based on the number of columns retained vs all columns
+        double column_ratio = (double)current.num_columns / (child_cost > 0 ? estimate_cost(node->child).num_columns : 1);
+        return child_cost * (0.9 + (0.1 * column_ratio));
+    }
+    
+    // For nodes with children but not covered above, sum the costs
+    double cost = current.cost;
+    if (node->child) {
+        cost += calculate_total_plan_cost(node->child);
+    }
+    if (node->next) {
+        cost += calculate_total_plan_cost(node->next);
+    }
+    
+    if (debugkaru) printf("[DEBUG] Total cost for node %s: %.1f\n", node->operation, cost);
+    
+    return cost;
 }
+
 // CostMetrics estimate_cost(Node *node) {
 //     CostMetrics metrics = {0, 0, 0.0};
 //     if (!node) return metrics;
