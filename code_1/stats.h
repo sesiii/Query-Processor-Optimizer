@@ -9,7 +9,7 @@ typedef struct ColumnStats {
     int distinct_values;
     int min_value;
     int max_value;
-    double selectivity;  // Selectivity factor (between 0 and 1)
+    double selectivity; 
 } ColumnStats;
 
 typedef struct TableStats {
