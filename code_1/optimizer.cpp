@@ -10,7 +10,7 @@
 int enable_selection_pushdown = 1;
 int enable_projection_pushdown = 1;
 int enable_join_reordering = 0;
-int debugkaru = 1;
+int debugkaru = 0;
 
 Node* duplicate_node(Node *node) {
     if (!node) return NULL;
@@ -56,14 +56,17 @@ static int count_columns(const char *columns) {
     char *copy = strdup(columns);
     char *token = strtok(copy, ",");
     while (token) {
-        while (*token == ' ') token++;
-        count++;
+        while (*token == ' ') token++; // Trim leading spaces
+        char *end = token + strlen(token) - 1;
+        while (end > token && isspace(*end)) *end-- = '\0'; // Trim trailing spaces
+        if (*token != '\0') { // Skip empty tokens
+            count++;
+        }
         token = strtok(NULL, ",");
     }
     free(copy);
     return count;
 }
-
 static int count_required_columns(Node *node) {
     // Walk up the tree to find what columns are needed
     Node *current = node;
@@ -210,17 +213,84 @@ double calculate_total_plan_cost(Node *node) {
     double child_cost = calculate_total_plan_cost(node->child);
     double next_cost = calculate_total_plan_cost(node->next);
     
+    if (debugkaru) printf("[DEBUG] Total cost for node %s: current=%.1f, child=%.1f, next=%.1f\n",
+                         node->operation, current.cost, child_cost, next_cost);
+    
     return current.cost + child_cost + next_cost;
 }
+// CostMetrics estimate_cost(Node *node) {
+//     CostMetrics metrics = {0, 0, 0.0};
+//     if (!node) return metrics;
+
+//     if (strcmp(node->operation, "table") == 0) {
+//         TableStats *stats = get_table_stats(node->arg1);
+//         metrics.result_size = stats ? stats->row_count : 1000;
+//         metrics.num_columns = stats ? stats->column_count : 4;
+//         metrics.cost = metrics.result_size * metrics.num_columns;
+//         return metrics;
+//     }
+
+//     if (strcmp(node->operation, "σ") == 0) {
+//         CostMetrics child = estimate_cost(node->child);
+//         double selectivity = get_condition_selectivity(node);
+        
+//         metrics.result_size = (int)(child.result_size * selectivity);
+//         if (metrics.result_size == 0 && child.result_size > 0) {
+//             metrics.result_size = 1;
+//         }
+//         metrics.num_columns = child.num_columns;
+//         // Only count this node's cost, not child's
+//         metrics.cost = metrics.result_size * metrics.num_columns;
+//         return metrics;
+//     }
+
+//     if (strcmp(node->operation, "⨝") == 0) {
+//         if (!node->child || !node->child->next) return metrics;
+        
+//         CostMetrics left = estimate_cost(node->child);
+//         CostMetrics right = estimate_cost(node->child->next);
+//         double selectivity = get_join_selectivity(node);
+        
+//         metrics.result_size = (int)(left.result_size * right.result_size * selectivity);
+//         if (metrics.result_size == 0 && left.result_size > 0 && right.result_size > 0) {
+//             metrics.result_size = 1;
+//         }
+        
+//         metrics.num_columns = count_required_columns(node);
+//         // Only count this node's cost
+//         metrics.cost = metrics.result_size * metrics.num_columns;
+//         return metrics;
+//     }
+
+//     if (strcmp(node->operation, "π") == 0) {
+//         CostMetrics child = estimate_cost(node->child);
+//         metrics.result_size = child.result_size;
+//         metrics.num_columns = count_columns(node->arg1);
+//         // Only count this node's cost
+//         metrics.cost = metrics.result_size * metrics.num_columns;
+//         return metrics;
+//     }
+
+//     return metrics;
+// }
+
 CostMetrics estimate_cost(Node *node) {
     CostMetrics metrics = {0, 0, 0.0};
-    if (!node) return metrics;
+    if (!node) {
+        if (debugkaru) printf("[DEBUG] estimate_cost: NULL node, returning {0, 0, 0.0}\n");
+        return metrics;
+    }
+
+    if (debugkaru) printf("[DEBUG] estimate_cost: node=%s, arg1=%s\n", 
+                         node->operation, node->arg1 ? node->arg1 : "NULL");
 
     if (strcmp(node->operation, "table") == 0) {
         TableStats *stats = get_table_stats(node->arg1);
         metrics.result_size = stats ? stats->row_count : 1000;
         metrics.num_columns = stats ? stats->column_count : 4;
         metrics.cost = metrics.result_size * metrics.num_columns;
+        if (debugkaru) printf("[DEBUG] Table %s: rows=%d, cols=%d, cost=%.1f\n",
+                             node->arg1, metrics.result_size, metrics.num_columns, metrics.cost);
         return metrics;
     }
 
@@ -230,16 +300,21 @@ CostMetrics estimate_cost(Node *node) {
         
         metrics.result_size = (int)(child.result_size * selectivity);
         if (metrics.result_size == 0 && child.result_size > 0) {
-            metrics.result_size = 1;
+            metrics.result_size = 1; // At least one row
         }
         metrics.num_columns = child.num_columns;
-        // Only count this node's cost, not child's
         metrics.cost = metrics.result_size * metrics.num_columns;
+        if (debugkaru) printf("[DEBUG] Selection %s: selectivity=%.4f, rows=%d, cols=%d, cost=%.1f\n",
+                             node->arg1, selectivity, metrics.result_size, metrics.num_columns, metrics.cost);
         return metrics;
     }
 
     if (strcmp(node->operation, "⨝") == 0) {
-        if (!node->child || !node->child->next) return metrics;
+        if (!node->child || !node->child->next) {
+            if (debugkaru) printf("[DEBUG] Join %s: missing children, returning {0, 0, 0.0}\n",
+                                 node->arg1 ? node->arg1 : "NULL");
+            return metrics;
+        }
         
         CostMetrics left = estimate_cost(node->child);
         CostMetrics right = estimate_cost(node->child->next);
@@ -247,12 +322,22 @@ CostMetrics estimate_cost(Node *node) {
         
         metrics.result_size = (int)(left.result_size * right.result_size * selectivity);
         if (metrics.result_size == 0 && left.result_size > 0 && right.result_size > 0) {
-            metrics.result_size = 1;
+            metrics.result_size = 1; // At least one row
         }
-        
-        metrics.num_columns = count_required_columns(node);
-        // Only count this node's cost
+        // Columns needed are those in the output (based on parent projection)
+        metrics.num_columns = left.num_columns + right.num_columns;
+        // Check if there's a parent projection to restrict columns
+        Node *parent = node;
+        while (parent->next) {
+            parent = parent->next;
+            if (parent->operation && strcmp(parent->operation, "π") == 0) {
+                metrics.num_columns = count_columns(parent->arg1);
+                break;
+            }
+        }
         metrics.cost = metrics.result_size * metrics.num_columns;
+        if (debugkaru) printf("[DEBUG] Join %s: selectivity=%.4f, rows=%d, cols=%d, cost=%.1f\n",
+                             node->arg1, selectivity, metrics.result_size, metrics.num_columns, metrics.cost);
         return metrics;
     }
 
@@ -260,11 +345,13 @@ CostMetrics estimate_cost(Node *node) {
         CostMetrics child = estimate_cost(node->child);
         metrics.result_size = child.result_size;
         metrics.num_columns = count_columns(node->arg1);
-        // Only count this node's cost
         metrics.cost = metrics.result_size * metrics.num_columns;
+        if (debugkaru) printf("[DEBUG] Projection %s: rows=%d, cols=%d, cost=%.1f\n",
+                             node->arg1, metrics.result_size, metrics.num_columns, metrics.cost);
         return metrics;
     }
 
+    if (debugkaru) printf("[DEBUG] Unknown node %s: returning {0, 0, 0.0}\n", node->operation);
     return metrics;
 }
 
@@ -391,6 +478,245 @@ static Node* create_restricted_projection(Node *node, const char *projection_lis
     return node;
 }
 
+// Node* push_down_projections(Node *node) {
+//     if (!node) {
+//         if (debugkaru) printf("\n[DEBUG] Node is NULL, returning NULL\n");
+//         return NULL;
+//     }
+    
+//     if (debugkaru) printf("\n[DEBUG] ENTER push_down_projections for node type: %s, arg1: %s\n", 
+//            node->operation ? node->operation : "NULL", 
+//            node->arg1 ? node->arg1 : "NULL");
+    
+//     if (node->operation && strcmp(node->operation, "π") == 0) {
+//         if (debugkaru) printf("\n[DEBUG] Found projection node with columns: %s\n", node->arg1);
+        
+//         Node *child = node->child;
+//         if (!child) {
+//             if (debugkaru) printf("\n[DEBUG] Projection has no child, returning node\n");
+//             return node;
+//         }
+        
+//         if (debugkaru) printf("\n[DEBUG] Child operation: %s\n", child->operation ? child->operation : "NULL");
+        
+//         if (child->operation && strcmp(child->operation, "σ") == 0) {
+//             if (debugkaru) printf("\n[DEBUG] Case 1: Push projection through selection\n");
+            
+//             if (debugkaru) printf("\n[DEBUG] Selection condition: %s\n", child->arg1 ? child->arg1 : "NULL");
+            
+//             Node *new_projection = new_node("π", strdup(node->arg1), NULL);
+//             if (debugkaru) printf("\n[DEBUG] Created new projection with columns: %s\n", new_projection->arg1);
+            
+//             new_projection->child = child->child;
+//             if (debugkaru) printf("\n[DEBUG] Connected new projection to selection's child\n");
+            
+//             child->child = new_projection;
+//             if (debugkaru) printf("\n[DEBUG] Put new projection under selection\n");
+            
+//             if (debugkaru) printf("\n[DEBUG] Returning selection node as new root\n");
+//             Node *result = child;
+//             node->child = NULL;
+//             free(node->operation);
+//             free(node->arg1);
+//             free(node);
+            
+//             if (debugkaru) printf("\n[DEBUG] Recursively optimizing projection under selection\n");
+//             result->child = push_down_projections(result->child);
+            
+//             if (debugkaru) printf("\n[DEBUG] EXIT push_down_projections with selection root\n");
+//             return result;
+//         }
+//         else if (child->operation && strcmp(child->operation, "table") == 0 && 
+//                  child->next && child->next->operation && strcmp(child->next->operation, "⨝") == 0) {
+            
+//             if (debugkaru) printf("\n[DEBUG] Case 2: Push projection through join\n");
+            
+//             Node *left_table = child;
+//             Node *join_node = child->next;
+            
+//             if (debugkaru) printf("\n[DEBUG] Left table: %s\n", left_table->arg1);
+//             if (debugkaru) printf("\n[DEBUG] Join condition: %s\n", join_node->arg1);
+            
+//             Node *right_table = NULL;
+//             if (left_table->child && left_table->child->operation && 
+//                 strcmp(left_table->child->operation, "table") == 0) {
+//                 right_table = left_table->child;
+//                 if (debugkaru) printf("\n[DEBUG] Found right table as child of left table: %s\n", right_table->arg1);
+//             } else {
+//                 if (debugkaru) printf("\n[DEBUG] Could not find right table, returning original node\n");
+//                 if (debugkaru) printf("\n[DEBUG] EXIT push_down_projections with original node\n");
+//                 return node;
+//             }
+            
+//             if (debugkaru) printf("\n[DEBUG] Parsing projection columns: %s\n", node->arg1);
+//             char *columns = strdup(node->arg1);
+//             char *column_list[100];
+//             int column_count = 0;
+            
+//             // char *token = strtok(columns, ",");
+//             // while (token) {
+//             //     while (*token == ' ') token++;
+//             //     column_list[column_count] = strdup(token);
+//             //     if (debugkaru) printf("\n[DEBUG] Column %d: %s\n", column_count, column_list[column_count]);
+//             //     column_count++;
+//             //     token = strtok(NULL, ",");
+//             // }
+//             // In push_down_projections(), modify the column parsing section:
+// char *token = strtok(columns, ",");
+// while (token) {
+//     // Trim whitespace and remove empty entries
+//     while (*token == ' ') token++;
+//     char *end = token + strlen(token) - 1;
+//     while (end > token && isspace(*end)) *end-- = '\0';
+    
+//     if (*token != '\0') {  // Skip empty entries
+//         column_list[column_count] = strdup(token);
+//         if (debugkaru) printf("\n[DEBUG] Column %d: %s\n", column_count, column_list[column_count]);
+//         column_count++;
+//     }
+//     token = strtok(NULL, ",");
+// }
+
+//             if (debugkaru) printf("\n[DEBUG] Parsing join condition: %s\n", join_node->arg1);
+//             char *left_table_name = NULL, *left_col = NULL;
+//             char *right_table_name = NULL, *right_col = NULL;
+//             parse_join_condition(join_node->arg1, &left_table_name, &left_col, 
+//                                &right_table_name, &right_col);
+            
+//             if (debugkaru) printf("\n[DEBUG] Join parsed: %s.%s = %s.%s\n", 
+//                    left_table_name ? left_table_name : "NULL", 
+//                    left_col ? left_col : "NULL", 
+//                    right_table_name ? right_table_name : "NULL", 
+//                    right_col ? right_col : "NULL");
+            
+//             char left_columns[512] = "";
+//             char right_columns[512] = "";
+//             int left_has_columns = 0;
+//             int right_has_columns = 0;
+            
+//             // NEW: Track required columns for join condition
+//             char required_left_columns[512] = "";
+//             char required_right_columns[512] = "";
+//             if (left_table_name && left_col) {
+//                 sprintf(required_left_columns, "%s.%s", left_table_name, left_col);
+//                 left_has_columns = 1;
+//             }
+//             if (right_table_name && right_col) {
+//                 sprintf(required_right_columns, "%s.%s", right_table_name, right_col);
+//                 right_has_columns = 1;
+//             }
+            
+//             if (debugkaru) printf("\n[DEBUG] Sorting columns by table\n");
+//             for (int i = 0; i < column_count; i++) {
+//                 char *table = NULL, *column = NULL;
+//                 extract_table_column(column_list[i], &table, &column);
+                
+//                 if (debugkaru) printf("\n[DEBUG] Column %d: table=%s, column=%s\n", 
+//                        i, table ? table : "NULL", column ? column : "NULL");
+                
+//                 if (table) {
+//                     if (strcmp(table, left_table->arg1) == 0) {
+//                         if (left_has_columns) strcat(left_columns, ",");
+//                         strcat(left_columns, column_list[i]);
+//                         left_has_columns = 1;
+//                         if (debugkaru) printf("\n[DEBUG] Added to left columns: %s\n", column_list[i]);
+//                     }
+//                     else if (strcmp(table, right_table->arg1) == 0) {
+//                         if (right_has_columns) strcat(right_columns, ",");
+//                         strcat(right_columns, column_list[i]);
+//                         right_has_columns = 1;
+//                         if (debugkaru) printf("\n[DEBUG] Added to right columns: %s\n", column_list[i]);
+//                     }
+//                 }
+                
+//                 if (table) free(table);
+//                 if (column) free(column);
+//             }
+            
+//             // NEW: Add join columns if not already included
+//             if (strlen(required_left_columns) > 0 && !strstr(left_columns, required_left_columns)) {
+//                 if (left_has_columns) strcat(left_columns, ",");
+//                 strcat(left_columns, required_left_columns);
+//                 if (debugkaru) printf("\n[DEBUG] Added join column to left: %s\n", required_left_columns);
+//             }
+            
+//             if (strlen(required_right_columns) > 0 && !strstr(right_columns, required_right_columns)) {
+//                 if (right_has_columns) strcat(right_columns, ",");
+//                 strcat(right_columns, required_right_columns);
+//                 if (debugkaru) printf("\n[DEBUG] Added join column to right: %s\n", required_right_columns);
+//             }
+            
+//             if (debugkaru) printf("\n[DEBUG] Final left columns: %s\n", left_columns);
+//             if (debugkaru) printf("\n[DEBUG] Final right columns: %s\n", right_columns);
+            
+//             Node *new_left_table = new_node("table", strdup(left_table->arg1), NULL);
+//             Node *new_right_table = new_node("table", strdup(right_table->arg1), NULL);
+            
+//             Node *left_projection = NULL;
+//             if (left_has_columns || strlen(required_left_columns) > 0) {
+//                 left_projection = new_node("π", strdup(left_columns), NULL);
+//                 left_projection->child = new_left_table;
+//                 if (debugkaru) printf("\n[DEBUG] Created left projection: π(%s)\n", left_columns);
+//             } else {
+//                 left_projection = new_left_table;
+//                 if (debugkaru) printf("\n[DEBUG] No left projection needed\n");
+//             }
+            
+//             Node *right_projection = NULL;
+//             if (right_has_columns || strlen(required_right_columns) > 0) {
+//                 right_projection = new_node("π", strdup(right_columns), NULL);
+//                 right_projection->child = new_right_table;
+//                 if (debugkaru) printf("\n[DEBUG] Created right projection: π(%s)\n", right_columns);
+//             } else {
+//                 right_projection = new_right_table;
+//                 if (debugkaru) printf("\n[DEBUG] No right projection needed\n");
+//             }
+            
+//             Node *new_join = new_node("⨝", strdup(join_node->arg1), NULL);
+            
+//             if (debugkaru) printf("\n[DEBUG] Rebuilding tree with clean structure\n");
+            
+//             new_join->child = left_projection;
+//             left_projection->next = right_projection;
+            
+//             Node *top_projection = new_node("π", strdup(node->arg1), NULL);
+//             top_projection->child = new_join;
+            
+//             for (int i = 0; i < column_count; i++) {
+//                 free(column_list[i]);
+//             }
+//             free(columns);
+//             if (left_table_name) free(left_table_name);
+//             if (left_col) free(left_col); 
+//             if (right_table_name) free(right_table_name);
+//             if (right_col) free(right_col);
+            
+//             node->child = NULL;
+//             free(node->operation);
+//             free(node->arg1);
+//             free(node);
+            
+//             if (debugkaru) printf("\n[DEBUG] Tree rebuilt with clean structure, returning new top projection\n");
+//             if (debugkaru) printf("\n[DEBUG] EXIT push_down_projections with rebuilt tree\n");
+//             return top_projection;
+//         }
+//     }
+    
+//     if (node->child) {
+//         if (debugkaru) printf("\n[DEBUG] Recursively processing child of %s\n", node->operation);
+//         node->child = push_down_projections(node->child);
+//     }
+//     if (node->next) {
+//         if (debugkaru) printf("\n[DEBUG] Recursively processing next of %s\n", node->operation);
+//         node->next = push_down_projections(node->next);
+//     }
+    
+//     if (debugkaru) printf("\n[DEBUG] EXIT push_down_projections returning node type: %s\n", 
+//            node->operation ? node->operation : "NULL");
+//     return node;
+// }
+
+
 Node* push_down_projections(Node *node) {
     if (!node) {
         if (debugkaru) printf("\n[DEBUG] Node is NULL, returning NULL\n");
@@ -466,30 +792,19 @@ Node* push_down_projections(Node *node) {
             char *column_list[100];
             int column_count = 0;
             
-            // char *token = strtok(columns, ",");
-            // while (token) {
-            //     while (*token == ' ') token++;
-            //     column_list[column_count] = strdup(token);
-            //     if (debugkaru) printf("\n[DEBUG] Column %d: %s\n", column_count, column_list[column_count]);
-            //     column_count++;
-            //     token = strtok(NULL, ",");
-            // }
-            // In push_down_projections(), modify the column parsing section:
-char *token = strtok(columns, ",");
-while (token) {
-    // Trim whitespace and remove empty entries
-    while (*token == ' ') token++;
-    char *end = token + strlen(token) - 1;
-    while (end > token && isspace(*end)) *end-- = '\0';
-    
-    if (*token != '\0') {  // Skip empty entries
-        column_list[column_count] = strdup(token);
-        if (debugkaru) printf("\n[DEBUG] Column %d: %s\n", column_count, column_list[column_count]);
-        column_count++;
-    }
-    token = strtok(NULL, ",");
-}
-
+            char *token = strtok(columns, ",");
+            while (token) {
+                while (*token == ' ') token++;
+                char *end = token + strlen(token) - 1;
+                while (end > token && isspace(*end)) *end-- = '\0';
+                if (*token != '\0') {
+                    column_list[column_count] = strdup(token);
+                    if (debugkaru) printf("\n[DEBUG] Column %d: %s\n", column_count, column_list[column_count]);
+                    column_count++;
+                }
+                token = strtok(NULL, ",");
+            }
+            
             if (debugkaru) printf("\n[DEBUG] Parsing join condition: %s\n", join_node->arg1);
             char *left_table_name = NULL, *left_col = NULL;
             char *right_table_name = NULL, *right_col = NULL;
@@ -506,18 +821,6 @@ while (token) {
             char right_columns[512] = "";
             int left_has_columns = 0;
             int right_has_columns = 0;
-            
-            // NEW: Track required columns for join condition
-            char required_left_columns[512] = "";
-            char required_right_columns[512] = "";
-            if (left_table_name && left_col) {
-                sprintf(required_left_columns, "%s.%s", left_table_name, left_col);
-                left_has_columns = 1;
-            }
-            if (right_table_name && right_col) {
-                sprintf(required_right_columns, "%s.%s", right_table_name, right_col);
-                right_has_columns = 1;
-            }
             
             if (debugkaru) printf("\n[DEBUG] Sorting columns by table\n");
             for (int i = 0; i < column_count; i++) {
@@ -546,17 +849,27 @@ while (token) {
                 if (column) free(column);
             }
             
-            // NEW: Add join columns if not already included
-            if (strlen(required_left_columns) > 0 && !strstr(left_columns, required_left_columns)) {
-                if (left_has_columns) strcat(left_columns, ",");
-                strcat(left_columns, required_left_columns);
-                if (debugkaru) printf("\n[DEBUG] Added join column to left: %s\n", required_left_columns);
+            // Ensure join columns are included
+            if (left_table_name && left_col) {
+                char full_col[100];
+                sprintf(full_col, "%s.%s", left_table_name, left_col);
+                if (!strstr(left_columns, full_col)) {
+                    if (left_has_columns) strcat(left_columns, ",");
+                    strcat(left_columns, full_col);
+                    left_has_columns = 1;
+                    if (debugkaru) printf("\n[DEBUG] Added join column to left: %s\n", full_col);
+                }
             }
             
-            if (strlen(required_right_columns) > 0 && !strstr(right_columns, required_right_columns)) {
-                if (right_has_columns) strcat(right_columns, ",");
-                strcat(right_columns, required_right_columns);
-                if (debugkaru) printf("\n[DEBUG] Added join column to right: %s\n", required_right_columns);
+            if (right_table_name && right_col) {
+                char full_col[100];
+                sprintf(full_col, "%s.%s", right_table_name, right_col);
+                if (!strstr(right_columns, full_col)) {
+                    if (right_has_columns) strcat(right_columns, ",");
+                    strcat(right_columns, full_col);
+                    right_has_columns = 1;
+                    if (debugkaru) printf("\n[DEBUG] Added join column to right: %s\n", full_col);
+                }
             }
             
             if (debugkaru) printf("\n[DEBUG] Final left columns: %s\n", left_columns);
@@ -566,7 +879,7 @@ while (token) {
             Node *new_right_table = new_node("table", strdup(right_table->arg1), NULL);
             
             Node *left_projection = NULL;
-            if (left_has_columns || strlen(required_left_columns) > 0) {
+            if (left_has_columns) {
                 left_projection = new_node("π", strdup(left_columns), NULL);
                 left_projection->child = new_left_table;
                 if (debugkaru) printf("\n[DEBUG] Created left projection: π(%s)\n", left_columns);
@@ -576,7 +889,7 @@ while (token) {
             }
             
             Node *right_projection = NULL;
-            if (right_has_columns || strlen(required_right_columns) > 0) {
+            if (right_has_columns) {
                 right_projection = new_node("π", strdup(right_columns), NULL);
                 right_projection->child = new_right_table;
                 if (debugkaru) printf("\n[DEBUG] Created right projection: π(%s)\n", right_columns);
@@ -629,8 +942,6 @@ while (token) {
     return node;
 }
 
-
-
 static int get_table_columns(const char *table_name) {
     TableStats *stats = get_table_stats(table_name);
     return stats ? stats->column_count : 4; // Default to 4 if no stats
@@ -676,6 +987,93 @@ void print_execution_plan(Node *node, const char *title) {
     print_execution_plan_recursive(node, 0);
 }
 
+// Node* optimize_query(Node *root) {
+//     if (!root) return NULL;
+    
+//     printf("\nOptimizing query...\n");
+    
+//     init_stats();
+    
+//     printf("\nOriginal Execution Plan:\n");
+//     CostMetrics original_cost = estimate_cost(root);
+//     print_execution_plan(root, "Original Plan");
+    
+//     Node *original_root = duplicate_node(root);
+    
+//     Node *selection_optimized = duplicate_node(original_root);
+//     CostMetrics selection_cost = {0, 0, 0.0};
+//     if (enable_selection_pushdown) {
+//         printf("\nApplying selection push-down...\n");
+//         selection_optimized = push_down_selections(selection_optimized);
+//         selection_cost = estimate_cost(selection_optimized);
+//         print_execution_plan(selection_optimized, "Selection Pushdown Plan");
+//     } else {
+//         selection_cost = original_cost;
+//     }
+    
+//     Node *projection_optimized = duplicate_node(original_root);
+//     CostMetrics projection_cost = {0, 0, 0.0};
+//     if (enable_projection_pushdown) {
+//         printf("\nApplying projection push-down...\n");
+//         printf("I am ghere..\n");
+//         projection_optimized = push_down_projections(projection_optimized);
+//         projection_cost = estimate_cost(projection_optimized);
+//         print_execution_plan(projection_optimized, "Projection Pushdown Plan");
+//     } else {
+//         projection_cost = original_cost;
+//     }
+    
+//     // Replace the cost comparison with:
+// double original_total = estimate_cost(root).cost;
+// double selection_total = estimate_cost(selection_optimized).cost;
+// double projection_total = estimate_cost(projection_optimized).cost;
+    
+//     Node *best_plan = root;
+//     CostMetrics best_cost = original_cost;
+//     const char *best_plan_name = "Original";
+//     double best_total = original_total;
+    
+//     if (selection_total <= best_total) {
+//         best_plan = selection_optimized;
+//         best_cost = selection_cost;
+//         best_plan_name = "Selection Pushdown";
+//         best_total = selection_total;
+//     } else {
+//         free_node(selection_optimized);
+//     }
+    
+//     if (projection_total <= best_total) {
+//         if (best_plan != root) free_node(best_plan);
+//         best_plan = projection_optimized;
+//         best_cost = projection_cost;
+//         best_plan_name = "Projection Pushdown";
+//         best_total = projection_total;
+//     } else {
+//         free_node(projection_optimized);
+//     }
+    
+//     if (best_plan != root) {
+//         free_node(original_root);
+//     }
+    
+//     printf("\nCost Comparison:\n");
+//     printf("Metric          | Original      | Selection     | Projection    | Best Plan\n");
+//     printf("----------------|---------------|---------------|---------------|----------\n");
+//     printf("Result Size     | %-13d | %-13d | %-13d | %s\n",
+//            original_cost.result_size, selection_cost.result_size, projection_cost.result_size,
+//            best_plan_name);
+//     printf("Columns         | %-13d | %-13d | %-13d | %s\n",
+//            original_cost.num_columns, selection_cost.num_columns, projection_cost.num_columns,
+//            best_plan_name);
+//     printf("Total Cost      | %-13.1f | %-13.1f | %-13.1f | %s\n",
+//            original_total, selection_total, projection_total, best_plan_name);
+    
+//     printf("\nSelected Best Execution Plan (%s):\n", best_plan_name);
+//     print_execution_plan(best_plan, "Best Plan");
+    
+//     return best_plan;
+// }
+
 Node* optimize_query(Node *root) {
     if (!root) return NULL;
     
@@ -704,7 +1102,6 @@ Node* optimize_query(Node *root) {
     CostMetrics projection_cost = {0, 0, 0.0};
     if (enable_projection_pushdown) {
         printf("\nApplying projection push-down...\n");
-        printf("I am ghere..\n");
         projection_optimized = push_down_projections(projection_optimized);
         projection_cost = estimate_cost(projection_optimized);
         print_execution_plan(projection_optimized, "Projection Pushdown Plan");
@@ -712,10 +1109,9 @@ Node* optimize_query(Node *root) {
         projection_cost = original_cost;
     }
     
-    // Replace the cost comparison with:
-double original_total = estimate_cost(root).cost;
-double selection_total = estimate_cost(selection_optimized).cost;
-double projection_total = estimate_cost(projection_optimized).cost;
+    double original_total = calculate_total_plan_cost(root);
+    double selection_total = calculate_total_plan_cost(selection_optimized);
+    double projection_total = calculate_total_plan_cost(projection_optimized);
     
     Node *best_plan = root;
     CostMetrics best_cost = original_cost;
@@ -762,4 +1158,3 @@ double projection_total = estimate_cost(projection_optimized).cost;
     
     return best_plan;
 }
-
