@@ -6,3 +6,6 @@ departments 20 3
 dept_id,dept_name,location
 projects 5000 4
 project_id,project_name,dept_id,budget
+employees 10000 4
+emp_id,name,dept_id,salary
+dept_id:distinct=20,join_with=departments.dept_id,selectivity=0.05
