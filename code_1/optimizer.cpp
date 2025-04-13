@@ -1976,10 +1976,10 @@ Node* optimize_query(Node *root) {
         projection_cost = original_cost;
     }
     
-    // Replace the cost comparison with:
-double original_total = estimate_cost(root).cost;
-double selection_total = estimate_cost(selection_optimized).cost;
-double projection_total = estimate_cost(projection_optimized).cost;
+// Replace the cost comparison with:
+double original_total = calculate_total_plan_cost(root);
+double selection_total = calculate_total_plan_cost(selection_optimized);
+double projection_total = calculate_total_plan_cost(projection_optimized);
     
     Node *best_plan = root;
     CostMetrics best_cost = original_cost;
