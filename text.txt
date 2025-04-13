@@ -132,3 +132,17 @@ rm -f lex.yy.c parser.tab.c parser.tab.h query_processor
 but now, i am implementing an optimization as per my wish in the optimizer.c file, youll see in the initial part/
 
 what i want is, implenting both optimizations, compare both optimizations, and then showing the best optimization wrt cost
+
+struct data{
+string tname;
+int ncols;
+int ntups;
+vector<string> col_name;
+vector<vector<string>>tuples;
+}Data;
+
+well consider the cost this way, becuse this seems to be the best way to estimate costs, in selective pushdown, now of rows decrease and in projection pushdown, no of columns decrease, as compared to unoptimized plan, cost will be always less than no of rows* no of columns.
+Well implement this as a cost metric, no other metric
+
+also suggest anything you feel we can consider, as we are not working on a realdatabase, everything is in a separate file(metadata), so well also get to change it as per our needs directly in the file
+
