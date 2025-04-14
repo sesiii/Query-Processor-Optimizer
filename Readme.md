@@ -40,7 +40,6 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 ├── code/
 |        |── images/
 │        ├── cost_comparison.png
-│        ├── kgp.jpeg
 │        ├── original_ast.png
 │        ├── original_execplan.png
 │        ├── projection_pushdown_execplan.png
