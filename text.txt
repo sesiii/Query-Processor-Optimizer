@@ -146,3 +146,10 @@ Well implement this as a cost metric, no other metric
 
 also suggest anything you feel we can consider, as we are not working on a realdatabase, everything is in a separate file(metadata), so well also get to change it as per our needs directly in the file
 
+
+
+π(employees.name,departments.dept_name) [rows=500, cols=2, cost=1000.0]
+  σ(departments.dept_name = Engineering) [rows=500, cols=4, cost=2000.0]
+    ⨝(employees.dept_id = departments.dept_id) [rows=0, cols=0, cost=0.0]
+      table(employees) [rows=10000, cols=4, cost=40000.0]
+      table(departments) [rows=20, cols=3, cost=60.0]
