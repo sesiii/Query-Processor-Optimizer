@@ -1,93 +1,130 @@
-# Query Processor Optimizer
+# Query Processor and Optimizer
 
-### Stage 1: Query Parsing & AST Generation
-- Parses hardcoded SQL `SELECT-FROM-JOIN-WHERE` queries.
-- Constructs an **Abstract Syntax Tree (AST)** to represent the logical structure of the query.
-- AST is displayed in a readable tree format for analysis and debugging.
+This repository contains the source code and project report for a Query Processor and Optimizer developed for the Database Management Systems course (CS43002) at the Indian Institute of Technology Kharagpur.
 
-### Stage 2: Query Optimization - **Selection Push-Down**
-- Optimizes query by pushing down selections closer to base tables.
-- Reduces intermediate result sizes and improves query performance.
-- Cost estimation for each operator is shown after optimization.
+## Project Summary
 
+The project implements a query processor in C that parses SQL SELECT queries, builds an Abstract Syntax Tree (AST), and optimizes execution plans. It uses Flex for lexical analysis and Bison for parsing. The optimizer applies **selection pushdown** and **projection pushdown** to minimize computational cost, using table/column statistics for cost-based plan selection.
 
-### 🔍 Input Query
+Supported SQL constructs include:
+- `SELECT`
+- `FROM`
+- `WHERE`
+- `JOIN`
+- Aggregates (`COUNT`, `MAX`, `MIN`, `AVG`)
+
+The report analyzes a sample query:
+
 ```sql
-SELECT employees.name, salaries.salary 
+SELECT employees.name, departments.dept_name 
 FROM employees 
-JOIN salaries ON employees.emp_id = salaries.emp_id 
-WHERE salaries.salary > 50000;
+JOIN departments 
+ON employees.dept_id = departments.dept_id 
+WHERE departments.dept_name = 'Engineering';
 ```
 
-### Original AST
-```
-π(employees.name,salaries.salary)
-    σ(salaries.salary > 50000)
-        table(employees)
-            table(salaries)
-        ⨝(employees.emp_id = salaries.emp_id)
-```
+It compares execution plans (original, selection pushdown, projection pushdown) with cost estimates, demonstrating optimization effectiveness.
 
-### Optimized Execution Plan
-```
-π employees.name,salaries.salary (cost: 10005.00)
-    table(employees (cost: 10000.00))
-        σ salaries.salary > 50000 (cost: 8343.33)
-            table(salaries (cost: 10000.00))
-    ⨝ employees.emp_id = salaries.emp_id (cost: 0.00)
-```
+## Team Members
 
-![Optimized Execution Plan](stage2_output.png)
+- Dadi Sasank Kumar (22CS10020)
+- Jeevan Varma (22CS10038)
+- Gurram Dhanunjay (22CS10029)
+- Venkata Yaswanth (22CS30031)
+- Nerella Trilochan (22CS10048)
 
----
-
-## 🛠️ Build and Run
-
-1. **Compile the Project**
-     ```bash
-     flex lexer.l
-     bison -d parser.y
-     gcc lex.yy.c parser.tab.c main.c stats.c optimizer.c -o query_processor
-     ```
-
-2. **Run the Query Processor**
-     ```bash
-     ./query_processor
-     ```
-
-3. **Clean Build Files**
-     ```bash
-     rm -f lex.yy.c parser.tab.c parser.tab.h query_processor
-     ```
-
----
-
-## 📦 Project Structure
+## Repository Structure
 
 ```
-├── lexer.l           # Flex specification for lexical analysis
-├── parser.y          # Bison grammar for SQL parsing
-├── main.c            # Driver program
-├── stats.c           # Handles statistics and cost estimation
-├── optimizer.c       # Query optimization logic (Selection push-down)
-├── stage1_output.png # Sample AST visualization
-├── stage2_output.png # Sample optimized execution plan visualization
-└── README.md         # This file
+├── images/
+│   ├── cost_comparison.png
+│   ├── iit_logo.png
+│   ├── original_ast.png
+│   ├── original_execplan.png
+│   ├── projection_pushdown_execplan.png
+│   ├── selection_pushdown_exceplan.png
+├── src/
+│   ├── lexer.l
+│   ├── parser.y
+│   ├── main.cpp
+│   ├── optimizer.cpp
+│   ├── optimizer.hpp
+│   ├── stats.cpp
+│   ├── stats.hpp
+│   ├── parser.hpp
+├── report.tex
+├── query.sql
+├── README.md
 ```
 
----
+- **images/**: Contains report diagrams and the title page logo (iit_logo.png)
+- **src/**: C source files for the query processor
+- **report.tex**: LaTeX source for the project report
+- **query.sql**: Sample SQL query file
+- **README.md**: This file
 
-## 🔮 Coming Soon
-- **Stage 3**: Query Optimization - Join Reordering
-  - Implementing both Greedy and Cost-based join reordering strategies.
-  - Cost estimation for join operations.
-  - Visualization of the optimized query plan.
-- Join Reordering (Greedy & Cost-based)
-- Query plan visualization (graphical output)
+## Project Visuals
 
----
+### Original Abstract Syntax Tree
+![Original AST](images/original_ast.png)
 
-## 📜 License
+### Original Execution Plan
+![Original Execution Plan](images/original_execplan.png)
 
-This project is released under the MIT License.
+### Selection Pushdown Execution Plan
+![Selection Pushdown Execution Plan](images/selection_pushdown_exceplan.png)
 
+### Projection Pushdown Execution Plan
+![Projection Pushdown Execution Plan](images/projection_pushdown_execplan.png)
+
+### Cost Comparison
+![Cost Comparison of Execution Plans](images/cost_comparison.png)
+
+## Prerequisites
+
+- **LaTeX**: TeX Live, MiKTeX, or Overleaf for compiling report.tex
+- **Images**: Ensure all images listed above are in images/
+- **Optional**: Flex, Bison, and a C++ compiler (e.g., g++) for src/ files
+
+## Setup and Compilation
+
+### Clone the Repository:
+```bash
+git clone https://github.com/your-username/query-processor-optimizer.git
+cd query-processor-optimizer
+```
+
+### Verify Images:
+Confirm images/ has:
+- cost_comparison.png
+- iit_logo.png (institution logo)
+- original_ast.png
+- original_execplan.png
+- projection_pushdown_execplan.png
+- selection_pushdown_exceplan.png
+
+### Compile the Report:
+
+**Locally:**
+```bash
+pdflatex report.tex
+pdflatex report.tex  # Run twice for table of contents
+```
+Or upload report.tex and images/ to Overleaf.
+
+### View Output:
+Open report.pdf in a PDF viewer.
+
+## Notes
+
+- Update report.tex title page for institution, course (CS43002), or instructor name if different
+- Replace iit_logo.png with your institution's logo in images/
+- Source code in src/ requires Flex/Bison for compilation (not needed for report)
+- Ensure LaTeX packages (graphicx, listings, booktabs, etc.) are installed
+
+## Acknowledgments
+
+- Submitted to: Prof. [Instructor Name] (update in report.tex)
+- References: Database System Concepts (Silberschatz et al.), Database Management Systems (Ramakrishnan & Gehrke), Flex & Bison documentation
+
+Contributions and feedback are welcome!
