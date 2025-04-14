@@ -51,12 +51,14 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 │   ├── optimizer.hpp
 │   ├── stats.cpp
 │   ├── stats.hpp
+│   ├── Makefile
 │   ├── parser.hpp
 ├── report.tex
 |── Query-Processor-Optimizer_Report.pdf
 |── Proposal.pdf
 ├── query.sql
 ├── README.md
+
 ```
 ## Project Visuals
 
