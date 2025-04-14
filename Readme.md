@@ -67,7 +67,7 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 ### Clone the Repository:
 ```bash
 git clone https://github.com/sesiii/Query_Processor_Optimizer
-cd query-processor-optimizer
+cd Query_Processor_Optimizer
 make
 ```
 
