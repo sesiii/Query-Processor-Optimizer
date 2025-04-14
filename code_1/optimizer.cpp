@@ -641,6 +641,89 @@ void print_execution_plan(Node *node, const char *title) {
     print_execution_plan_recursive(node, 0);
 }
 
+
+// Add a structure to store node costs for breakup
+struct NodeCost {
+    char operation[10];
+    char* description;
+    double node_cost; // Cost from estimate_cost
+    double cumulative_cost; // Cost from calculate_total_plan_cost
+};
+
+// Modify print_execution_plan_recursive to collect costs
+void print_execution_plan_recursive(Node *node, int depth, NodeCost *cost_breakup, int *cost_index) {
+    if (!node) return;
+    
+    for (int i = 0; i < depth; i++) printf("  ");
+    
+    CostMetrics metrics = estimate_cost(node);
+    double node_cost = metrics.cost;
+    double cumulative_cost = calculate_total_plan_cost(node);
+    
+    // Store cost for breakup
+    if (*cost_index < 100) { // Prevent buffer overflow
+        snprintf(cost_breakup[*cost_index].operation, 10, "%s", node->operation);
+        cost_breakup[*cost_index].description = node->arg1 ? strdup(node->arg1) : strdup("none");
+        cost_breakup[*cost_index].node_cost = node_cost;
+        cost_breakup[*cost_index].cumulative_cost = cumulative_cost;
+        (*cost_index)++;
+    }
+    
+    if (strcmp(node->operation, "table") == 0) {
+        printf("table(%s) [rows=%d, cols=%d, cost=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.num_columns, metrics.cost);
+    }
+    else if (strcmp(node->operation, "σ") == 0) {
+        printf("σ(%s) [rows=%d, cols=%d, cost=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.num_columns, metrics.cost);
+    }
+    else if (strcmp(node->operation, "⨝") == 0) {
+        printf("⨝(%s) [rows=%d, cols=%d, cost=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.num_columns, metrics.cost);
+    }
+    else if (strcmp(node->operation, "π") == 0) {
+        printf("π(%s) [rows=%d, cols=%d, cost=%.1f]\n", 
+               node->arg1, metrics.result_size, metrics.num_columns, metrics.cost);
+    }
+    else {
+        printf("%s %s %s [rows=%d, cols=%d, cost=%.1f]\n", 
+               node->operation, 
+               node->arg1 ? node->arg1 : "", 
+               node->arg2 ? node->arg2 : "", 
+               metrics.result_size, metrics.num_columns, metrics.cost);
+    }
+    
+    print_execution_plan_recursive(node->child, depth + 1, cost_breakup, cost_index);
+    if (node->operation && strcmp(node->operation, "⨝") == 0) {
+        print_execution_plan_recursive(node->next, depth + 1, cost_breakup, cost_index);
+    } else {
+        print_execution_plan_recursive(node->next, depth, cost_breakup, cost_index);
+    }
+}
+
+// Modify print_execution_plan to initialize cost collection
+void print_execution_plan(Node *node, const char *title, NodeCost *cost_breakup, int *cost_index) {
+    printf("--- %s ---\n", title);
+    *cost_index = 0; // Reset cost index
+    print_execution_plan_recursive(node, 0, cost_breakup, cost_index);
+}
+
+// Add a function to print cost breakup
+void print_cost_breakup(const char *plan_name, NodeCost *cost_breakup, int cost_count, double total_cost) {
+    printf("\nCost Breakup for %s Plan:\n", plan_name);
+    printf("Node Type | Description                              | Node Cost | Cumulative Cost\n");
+    printf("----------|------------------------------------------|-----------|----------------\n");
+    for (int i = 0; i < cost_count; i++) {
+        printf("%-9s | %-40s | %-9.1f | %-14.1f\n", 
+               cost_breakup[i].operation, cost_breakup[i].description, 
+               cost_breakup[i].node_cost, cost_breakup[i].cumulative_cost);
+    }
+    printf("----------|------------------------------------------|-----------|----------------\n");
+    printf("Total     |                                          |           | %.1f\n", total_cost);
+    printf("Note: Node Cost is rows * columns (estimate_cost). Cumulative Cost includes selectivity and column ratio adjustments (calculate_total_plan_cost).\n");
+}
+
+// Update optimize_query to include cost breakup
 Node* optimize_query(Node *root) {
     if (!root) return NULL;
     
@@ -648,9 +731,14 @@ Node* optimize_query(Node *root) {
     
     init_stats();
     
+    NodeCost original_breakup[100];
+    NodeCost selection_breakup[100];
+    NodeCost projection_breakup[100];
+    int original_cost_index = 0, selection_cost_index = 0, projection_cost_index = 0;
+    
     printf("\nOriginal Execution Plan:\n");
     CostMetrics original_cost = estimate_cost(root);
-    print_execution_plan(root, "Original Plan");
+    print_execution_plan(root, "Original Plan", original_breakup, &original_cost_index);
     
     Node *original_root = duplicate_node(root);
     
@@ -660,7 +748,7 @@ Node* optimize_query(Node *root) {
         printf("\nApplying selection push-down...\n");
         selection_optimized = push_down_selections(selection_optimized);
         selection_cost = estimate_cost(selection_optimized);
-        print_execution_plan(selection_optimized, "Selection Pushdown Plan");
+        print_execution_plan(selection_optimized, "Selection Pushdown Plan", selection_breakup, &selection_cost_index);
     } else {
         selection_cost = original_cost;
     }
@@ -671,7 +759,7 @@ Node* optimize_query(Node *root) {
         printf("\nApplying projection push-down...\n");
         projection_optimized = push_down_projections(projection_optimized);
         projection_cost = estimate_cost(projection_optimized);
-        print_execution_plan(projection_optimized, "Projection Pushdown Plan");
+        print_execution_plan(projection_optimized, "Projection Pushdown Plan", projection_breakup, &projection_cost_index);
     } else {
         projection_cost = original_cost;
     }
@@ -720,8 +808,18 @@ Node* optimize_query(Node *root) {
     printf("Total Cost      | %-13.1f | %-13.1f | %-13.1f | %s\n",
            original_total, selection_total, projection_total, best_plan_name);
     
+    // Print cost breakups
+    // print_cost_breakup("Original", original_breakup, original_cost_index, original_total);
+    // print_cost_breakup("Selection Pushdown", selection_breakup, selection_cost_index, selection_total);
+    // print_cost_breakup("Projection Pushdown", projection_breakup, projection_cost_index, projection_total);
+    
+    // Free allocated descriptions
+    for (int i = 0; i < original_cost_index; i++) free(original_breakup[i].description);
+    for (int i = 0; i < selection_cost_index; i++) free(selection_breakup[i].description);
+    for (int i = 0; i < projection_cost_index; i++) free(projection_breakup[i].description);
+    
     printf("\nSelected Best Execution Plan (%s):\n", best_plan_name);
-    print_execution_plan(best_plan, "Best Plan");
+    print_execution_plan(best_plan, "Best Plan", original_breakup, &original_cost_index);
     
     return best_plan;
 }
