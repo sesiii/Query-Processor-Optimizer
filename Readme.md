@@ -4,7 +4,7 @@ This repository contains the source code and project report for a Query Processo
 
 ## Project Summary
 
-The project implements a query processor in C that parses SQL SELECT queries, builds an Abstract Syntax Tree (AST), and optimizes execution plans. It uses Flex for lexical analysis and Bison for parsing. The optimizer applies **selection pushdown** and **projection pushdown** to minimize computational cost, using table/column statistics for cost-based plan selection.
+The project implements a query processor in C++ that parses SQL SELECT queries, builds an Abstract Syntax Tree (AST), and optimizes execution plans. It uses Flex for lexical analysis and Bison for parsing. The optimizer applies **selection pushdown** and **projection pushdown** to minimize computational cost, using table/column statistics for cost-based plan selection.
 
 Supported SQL constructs include:
 - `SELECT`
@@ -38,7 +38,7 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 ```
 ├── images/
 │   ├── cost_comparison.png
-│   ├── iit_logo.png
+│   ├── kgp.jpeg
 │   ├── original_ast.png
 │   ├── original_execplan.png
 │   ├── projection_pushdown_execplan.png
