@@ -53,6 +53,7 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 │   ├── stats.hpp
 │   ├── parser.hpp
 ├── report.tex
+|── Query-Processor-Optimizer_Report.pdf
 ├── query.sql
 ├── README.md
 ```
