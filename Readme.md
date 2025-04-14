@@ -43,7 +43,7 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 │   ├── original_execplan.png
 │   ├── projection_pushdown_execplan.png
 │   ├── selection_pushdown_exceplan.png
-├── src/
+├── code/
 │   ├── lexer.l
 │   ├── parser.y
 │   ├── main.cpp
