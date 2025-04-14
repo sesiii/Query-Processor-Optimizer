@@ -36,14 +36,15 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 ## Repository Structure
 
 ```
-├── images/
-│   ├── cost_comparison.png
-│   ├── kgp.jpeg
-│   ├── original_ast.png
-│   ├── original_execplan.png
-│   ├── projection_pushdown_execplan.png
-│   ├── selection_pushdown_exceplan.png
+├
 ├── code/
+|        |── images/
+│        ├── cost_comparison.png
+│        ├── kgp.jpeg
+│        ├── original_ast.png
+│        ├── original_execplan.png
+│        ├── projection_pushdown_execplan.png
+│        ├── selection_pushdown_exceplan.png
 │   ├── lexer.l
 │   ├── parser.y
 │   ├── main.cpp
