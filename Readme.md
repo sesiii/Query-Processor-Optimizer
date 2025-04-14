@@ -56,29 +56,10 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 ├── query.sql
 ├── README.md
 ```
-
-- **images/**: Contains report diagrams and the title page logo (iit_logo.png)
-- **src/**: C source files for the query processor
-- **report.tex**: LaTeX source for the project report
-- **query.sql**: Sample SQL query file
-- **README.md**: This file
-
 ## Project Visuals
 
-### Original Abstract Syntax Tree
-![Original AST](images/original_ast.png)
+![image](https://github.com/user-attachments/assets/0d9a556b-1df1-4d3c-bf83-0e3231ca9314)
 
-### Original Execution Plan
-![Original Execution Plan](images/original_execplan.png)
-
-### Selection Pushdown Execution Plan
-![Selection Pushdown Execution Plan](images/selection_pushdown_exceplan.png)
-
-### Projection Pushdown Execution Plan
-![Projection Pushdown Execution Plan](images/projection_pushdown_execplan.png)
-
-### Cost Comparison
-![Cost Comparison of Execution Plans](images/cost_comparison.png)
 
 ## Setup and Compilation
 
