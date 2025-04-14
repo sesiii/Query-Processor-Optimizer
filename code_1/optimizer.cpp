@@ -797,28 +797,28 @@ Node* optimize_query(Node *root) {
     }
     
     printf("\nCost Comparison:\n");
-    printf("Metric          | Original      | Selection     | Projection    | Best Plan\n");
-    printf("----------------|---------------|---------------|---------------|----------\n");
-    printf("Result Size     | %-13d | %-13d | %-13d | %s\n",
-           original_cost.result_size, selection_cost.result_size, projection_cost.result_size,
-           best_plan_name);
-    printf("Columns         | %-13d | %-13d | %-13d | %s\n",
-           original_cost.num_columns, selection_cost.num_columns, projection_cost.num_columns,
-           best_plan_name);
-    printf("Total Cost      | %-13.1f | %-13.1f | %-13.1f | %s\n",
-           original_total, selection_total, projection_total, best_plan_name);
+    printf("Metric          | Original      | Selection     | Projection    |\n");
+    printf("----------------|---------------|---------------|---------------|\n");
+    printf("Result Size     | %-13d | %-13d | %-13d | \n",
+           original_cost.result_size, selection_cost.result_size, projection_cost.result_size);
+    printf("Columns         | %-13d | %-13d | %-13d |\n",
+           original_cost.num_columns, selection_cost.num_columns, projection_cost.num_columns);
+    printf("Total Cost      | %-13.1f | %-13.1f | %-13.1f |\n",
+           original_total, selection_total, projection_total);
     
+    printf("\n%s is the best plan(lowest cost) with total cost %.1f\n", 
+           best_plan_name, best_total);
     // Print cost breakups
-    // print_cost_breakup("Original", original_breakup, original_cost_index, original_total);
-    // print_cost_breakup("Selection Pushdown", selection_breakup, selection_cost_index, selection_total);
-    // print_cost_breakup("Projection Pushdown", projection_breakup, projection_cost_index, projection_total);
+    print_cost_breakup("Original", original_breakup, original_cost_index, original_total);
+    print_cost_breakup("Selection Pushdown", selection_breakup, selection_cost_index, selection_total);
+    print_cost_breakup("Projection Pushdown", projection_breakup, projection_cost_index, projection_total);
     
     // Free allocated descriptions
     for (int i = 0; i < original_cost_index; i++) free(original_breakup[i].description);
     for (int i = 0; i < selection_cost_index; i++) free(selection_breakup[i].description);
     for (int i = 0; i < projection_cost_index; i++) free(projection_breakup[i].description);
     
-    printf("\nSelected Best Execution Plan (%s):\n", best_plan_name);
+    printf("\nSelected Best Execution Plan (%s):\n",best_plan_name);
     print_execution_plan(best_plan, "Best Plan", original_breakup, &original_cost_index);
     
     return best_plan;
