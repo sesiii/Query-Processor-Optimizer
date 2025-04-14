@@ -90,7 +90,7 @@ cd query-processor-optimizer
 
 ## Acknowledgments
 
-- Submitted to: Prof. [Instructor Name] (update in report.tex)
+- Flex & Bison documentation
 - References: Database System Concepts (Silberschatz et al.), Database Management Systems (Ramakrishnan & Gehrke), Flex & Bison documentation
 
 Contributions and feedback are welcome!
