@@ -80,47 +80,13 @@ It compares execution plans (original, selection pushdown, projection pushdown) 
 ### Cost Comparison
 ![Cost Comparison of Execution Plans](images/cost_comparison.png)
 
-## Prerequisites
-
-- **LaTeX**: TeX Live, MiKTeX, or Overleaf for compiling report.tex
-- **Images**: Ensure all images listed above are in images/
-- **Optional**: Flex, Bison, and a C++ compiler (e.g., g++) for src/ files
-
 ## Setup and Compilation
 
 ### Clone the Repository:
 ```bash
-git clone https://github.com/your-username/query-processor-optimizer.git
+git clone https://github.com/sesiii/query-processor-optimizer.git
 cd query-processor-optimizer
 ```
-
-### Verify Images:
-Confirm images/ has:
-- cost_comparison.png
-- iit_logo.png (institution logo)
-- original_ast.png
-- original_execplan.png
-- projection_pushdown_execplan.png
-- selection_pushdown_exceplan.png
-
-### Compile the Report:
-
-**Locally:**
-```bash
-pdflatex report.tex
-pdflatex report.tex  # Run twice for table of contents
-```
-Or upload report.tex and images/ to Overleaf.
-
-### View Output:
-Open report.pdf in a PDF viewer.
-
-## Notes
-
-- Update report.tex title page for institution, course (CS43002), or instructor name if different
-- Replace iit_logo.png with your institution's logo in images/
-- Source code in src/ requires Flex/Bison for compilation (not needed for report)
-- Ensure LaTeX packages (graphicx, listings, booktabs, etc.) are installed
 
 ## Acknowledgments
 
