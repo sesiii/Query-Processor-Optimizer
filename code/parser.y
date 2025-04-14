@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "parser.h"
+#include "parser.hpp"
 
 void yyerror(const char *s);
 int yylex();
@@ -55,7 +55,7 @@ column: column_item
     }
     | column COMMA column_item
     {
-        char *combined = malloc(strlen($1) + strlen($3) + 2);
+        char *combined = (char *)malloc(strlen($1) + strlen($3) + 2);
         sprintf(combined, "%s,%s", $1, $3);
         if (debug) printf("Combined columns: %s\n", combined);
         $$ = combined;
@@ -110,10 +110,9 @@ from_clause: table_ref
     }
     | table_ref join_clause
     {
-        $$ = $1;
-        $$->child = $2->child;
-        $2->child = NULL;
-        $$->next = $2;
+        $$ = $2; // Set the join node as the root of from_clause
+        $$->child = $1; // Left table as the first child
+        // Right table is already set in join_clause
     }
     ;
 
@@ -132,15 +131,16 @@ table_ref: IDENTIFIER
 join_clause: JOIN table_ref ON condition
     {
         if (debug) printf("Join clause: %s\n", $2->arg1);
-        $$ = new_node("⨝", $4->arg1, NULL);  // Join node with condition as argument
-        $$->child = $2;              // Right table as child
+        $$ = new_node("⨝", $4->arg1, NULL); // Join node with condition
+        $$->child = NULL; // Will be set in from_clause
+        $$->next = $2; // Right table as sibling (will be adjusted in from_clause)
     }
     ;
 
 where_clause: WHERE condition
     { 
         if (debug) printf("Where clause: %s\n", $2->arg1);
-        $$ = new_node("σ", $2->arg1, NULL); 
+        $$ =new_node("σ", $2->arg1, NULL); 
     }
     | /* empty */
     { 
