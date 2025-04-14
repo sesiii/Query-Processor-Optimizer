@@ -153,3 +153,258 @@ also suggest anything you feel we can consider, as we are not working on a reald
     ⨝(employees.dept_id = departments.dept_id) [rows=0, cols=0, cost=0.0]
       table(employees) [rows=10000, cols=4, cost=40000.0]
       table(departments) [rows=20, cols=3, cost=60.0]
+
+
+. Original Plan: Total Cost = 45883.5
+
+Plan Structure:
+text
+π(employees.name,departments.dept_name) [rows=500, cols=2, cost=1000.0]
+  σ(departments.dept_name = Engineering) [rows=500, cols=7, cost=3500.0]
+    ⨝(employees.dept_id = departments.dept_id) [rows=10000, cols=7, cost=70000.0]
+      table(employees) [rows=10000, cols=4, cost=40000.0]
+      table(departments) [rows=20, cols=3, cost=60.0]
+
+Breakup Table:
+text
+Node Type | Description                              | Node Cost | Cumulative Cost
+----------|------------------------------------------|-----------|----------------
+π         | employees.name,departments.dept_name     | 1000.0    | 45883.5
+σ         | departments.dept_name = Engineering      | 3500.0    | 49413.0
+⨝         | employees.dept_id = departments.dept_id  | 70000.0   | 47060.0
+table     | employees                                | 40000.0   | 40000.0
+table     | departments                              | 60.0      | 60.0
+
+Math Explanation:
+Let’s compute the Cumulative Cost using calculate_total_plan_cost bottom-up:
+
+    Table (employees):
+        Node Cost: result_size * num_columns = 10000 * 4 = 40000.0
+        Cumulative Cost: For a table, calculate_total_plan_cost returns estimate_cost.cost = 40000.0
+        Formula: return current.cost;
+        Result: Cumulative Cost = 40000.0
+    Table (departments):
+        Node Cost: 20 * 3 = 60.0
+        Cumulative Cost: 60.0
+        Formula: return current.cost;
+        Result: Cumulative Cost = 60.0
+    Join (⨝):
+        Node Cost: 10000 * 7 = 70000.0
+        Selectivity: get_join_selectivity returns 0.05 (default).
+        Child Costs:
+            Left (employees): 40000.0
+            Right (departments): 60.0
+        Cumulative Cost:
+            Formula: left_cost + right_cost + (result_size * num_columns * 0.1)
+            Calculation: 40000.0 + 60.0 + (10000 * 7 * 0.1) = 40060.0 + 7000.0 = 47060.0
+        Result: Cumulative Cost = 47060.0
+    Selection (σ):
+        Node Cost: 500 * 7 = 3500.0
+        Selectivity: get_condition_selectivity returns 0.05.
+        Child Cost (join): 47060.0
+        Cumulative Cost:
+            Formula: child_cost * (1.0 + selectivity)
+            Calculation: 47060.0 * (1.0 + 0.05) = 47060.0 * 1.05 = 49413.0
+        Result: Cumulative Cost = 49413.0
+    Projection (π):
+        Node Cost: 500 * 2 = 1000.0
+        Child Cost (selection): 49413.0
+        Column Ratio: num_columns / child_num_columns = 2 / 7 ≈ 0.2857
+        Cumulative Cost:
+            Formula: child_cost * (0.9 + 0.1 * column_ratio)
+            Calculation: 49413.0 * (0.9 + 0.1 * 0.2857) = 49413.0 * (0.9 + 0.02857) = 49413.0 * 0.92857 ≈ 45883.5
+        Result: Cumulative Cost = 45883.5
+
+Total Cost: The Cumulative Cost of the root node (π) is 45883.5, which matches the Total Cost in the Cost Comparison table.
+
+Why Node Costs Don’t Sum to Total:
+
+    Node Costs (1000.0 + 3500.0 + 70000.0 + 40000.0 + 60.0 = 114560.0) are from estimate_cost and represent raw data volume.
+    Cumulative Costs include:
+        Selectivity (1.05 for σ, 0.05 for ⨝) adjusts costs to reflect filtering/joining efficiency.
+        Column Ratio (0.2857 for π) reduces cost due to fewer output columns.
+        Recursive aggregation means each node’s Cumulative Cost includes its children’s costs, not just its Node Cost.
+
+Breakup Table Insight:
+
+    The table shows the subtree cost at each node:
+        π: Entire plan cost = 45883.5
+        σ: Cost of σ + join + tables = 49413.0
+        ⨝: Cost of join + tables = 47060.0
+        Tables: Just their own costs (40000.0, 60.0).
+    The Total Cost (45883.5) is the π node’s Cumulative Cost, as it’s the root.
+
+2. Selection Pushdown Plan: Total Cost = 37526.4
+
+Plan Structure:
+text
+π(employees.name,departments.dept_name) [rows=500, cols=2, cost=1000.0]
+  ⨝(employees.dept_id = departments.dept_id) [rows=500, cols=7, cost=3500.0]
+    table(employees) [rows=10000, cols=4, cost=40000.0]
+    σ(departments.dept_name = Engineering) [rows=1, cols=3, cost=3.0]
+      table(departments) [rows=20, cols=3, cost=60.0]
+
+Breakup Table:
+text
+Node Type | Description                              | Node Cost | Cumulative Cost
+----------|------------------------------------------|-----------|----------------
+π         | employees.name,departments.dept_name     | 1000.0    | 37526.4
+⨝         | employees.dept_id = departments.dept_id  | 3500.0    | 40413.0
+table     | employees                                | 40000.0   | 40000.0
+σ         | departments.dept_name = Engineering      | 3.0       | 63.0
+table     | departments                              | 60.0      | 60.0
+
+Math Explanation:
+
+    Table (departments):
+        Node Cost: 20 * 3 = 60.0
+        Cumulative Cost: 60.0
+        Result: Cumulative Cost = 60.0
+    Selection (σ):
+        Node Cost: 1 * 3 = 3.0
+        Selectivity: 0.05
+        Child Cost (departments): 60.0
+        Cumulative Cost:
+            Formula: child_cost * (1.0 + selectivity)
+            Calculation: 60.0 * (1.0 + 0.05) = 60.0 * 1.05 = 63.0
+        Result: Cumulative Cost = 63.0
+    Table (employees):
+        Node Cost: 10000 * 4 = 40000.0
+        Cumulative Cost: 40000.0
+        Result: Cumulative Cost = 40000.0
+    Join (⨝):
+        Node Cost: 500 * 7 = 3500.0
+        Selectivity: 0.05
+        Child Costs:
+            Left (employees): 40000.0
+            Right (σ): 63.0
+        Cumulative Cost:
+            Formula: left_cost + right_cost + (result_size * num_columns * 0.1)
+            Calculation: 40000.0 + 63.0 + (500 * 7 * 0.1) = 40063.0 + 350.0 = 40413.0
+        Result: Cumulative Cost = 40413.0
+    Projection (π):
+        Node Cost: 500 * 2 = 1000.0
+        Child Cost (join): 40413.0
+        Column Ratio: 2 / 7 ≈ 0.2857
+        Cumulative Cost:
+            Formula: child_cost * (0.9 + 0.1 * column_ratio)
+            Calculation: 40413.0 * (0.9 + 0.1 * 0.2857) = 40413.0 * 0.92857 ≈ 37526.4
+        Result: Cumulative Cost = 37526.4
+
+Total Cost: The root node’s Cumulative Cost = 37526.4.
+
+Why Lower Cost?:
+
+    The selection (σ) is pushed down to departments, reducing its rows to 1 before the join.
+    This makes the join process only 500 rows (vs. 10000 in Original), lowering the join’s cost (40413.0 vs. 47060.0).
+    Node Costs (1000.0 + 3500.0 + 40000.0 + 3.0 + 60.0 = 44563.0) don’t sum to 37526.4 due to selectivity (1.05 for σ, 0.05 for ⨝) and column ratio (0.2857 for π).
+
+Breakup Table Insight:
+
+    π: Entire plan = 37526.4
+    ⨝: Join + employees + σ subtree = 40413.0
+    Table (employees): 40000.0
+    σ: σ + departments = 63.0
+    Table (departments): 60.0
+
+3. Projection Pushdown Plan: Total Cost = 42060.9
+
+Plan Structure:
+text
+σ(departments.dept_name = Engineering) [rows=500, cols=2, cost=1000.0]
+  π(employees.name,departments.dept_name) [rows=10000, cols=2, cost=20000.0]
+    ⨝(employees.dept_id = departments.dept_id) [rows=10000, cols=2, cost=20000.0]
+      π(employees.name,employees.dept_id) [rows=10000, cols=2, cost=20000.0]
+        table(employees) [rows=10000, cols=4, cost=40000.0]
+      π(departments.dept_name,departments.dept_id) [rows=20, cols=2, cost=40.0]
+        table(departments) [rows=20, cols=3, cost=60.0]
+
+Breakup Table:
+text
+Node Type | Description                              | Node Cost | Cumulative Cost
+----------|------------------------------------------|-----------|----------------
+σ         | departments.dept_name = Engineering      | 1000.0    | 42060.9
+π         | employees.name,departments.dept_name     | 20000.0   | 40058.0
+⨝         | employees.dept_id = departments.dept_id  | 20000.0   | 40058.0
+π         | employees.name,employees.dept_id         | 20000.0   | 38000.0
+table     | employees                                | 40000.0   | 40000.0
+π         | departments.dept_name,departments.dept_id| 40.0      | 58.0
+table     | departments                              | 60.0      | 60.0
+
+Math Explanation:
+
+    Table (departments):
+        Node Cost: 20 * 3 = 60.0
+        Cumulative Cost: 60.0
+        Result: Cumulative Cost = 60.0
+    Projection (π, departments.dept_name,departments.dept_id):
+        Node Cost: 20 * 2 = 40.0
+        Child Cost (departments): 60.0
+        Column Ratio: 2 / 3 ≈ 0.6667
+        Cumulative Cost:
+            Formula: child_cost * (0.9 + 0.1 * column_ratio)
+            Calculation: 60.0 * (0.9 + 0.1 * 0.6667) = 60.0 * (0.9 + 0.06667) = 60.0 * 0.96667 ≈ 58.0
+        Result: Cumulative Cost = 58.0
+    Table (employees):
+        Node Cost: 10000 * 4 = 40000.0
+        Cumulative Cost: 40000.0
+        Result: Cumulative Cost = 40000.0
+    Projection (π, employees.name,employees.dept_id):
+        Node Cost: 10000 * 2 = 20000.0
+        Child Cost (employees): 40000.0
+        Column Ratio: 2 / 4 = 0.5
+        Cumulative Cost:
+            Formula: child_cost * (0.9 + 0.1 * column_ratio)
+            Calculation: 40000.0 * (0.9 + 0.1 * 0.5) = 40000.0 * (0.9 + 0.05) = 40000.0 * 0.95 = 38000.0
+        Result: Cumulative Cost = 38000.0
+    Join (⨝):
+        Node Cost: 10000 * 2 = 20000.0
+        Selectivity: 0.05
+        Child Costs:
+            Left (π employees): 38000.0
+            Right (π departments): 58.0
+        Cumulative Cost:
+            Formula: left_cost + right_cost + (result_size * num_columns * 0.1)
+            Calculation: 38000.0 + 58.0 + (10000 * 2 * 0.1) = 38058.0 + 2000.0 = 40058.0
+        Result: Cumulative Cost = 40058.0
+    Projection (π, employees.name,departments.dept_name):
+        Node Cost: 10000 * 2 = 20000.0
+        Child Cost (join): 40058.0
+        Column Ratio: 2 / 2 = 1.0
+        Cumulative Cost:
+            Formula: child_cost * (0.9 + 0.1 * column_ratio)
+            Calculation: 40058.0 * (0.9 + 0.1 * 1.0) = 40058.0 * (0.9 + 0.1) = 40058.0 * 1.0 = 40058.0
+        Result: Cumulative Cost = 40058.0
+    Selection (σ):
+        Node Cost: 500 * 2 = 1000.0
+        Selectivity: 0.05
+        Child Cost (π): 40058.0
+        Cumulative Cost:
+            Formula: child_cost * (1.0 + selectivity)
+            Calculation: 40058.0 * (1.0 + 0.05) = 40058.0 * 1.05 ≈ 42060.9
+        Result: Cumulative Cost = 42060.9
+
+Total Cost: The root node’s Cumulative Cost = 42060.9.
+
+Why Higher Cost?:
+
+    Projections reduce columns early (e.g., 2 columns vs. 7 in join), but the join still processes 10000 rows because the selection (σ) is applied last.
+    Node Costs (1000.0 + 20000.0 + 20000.0 + 20000.0 + 40000.0 + 40.0 + 60.0 = 101000.0) don’t sum to 42060.9 due to column ratio reductions (0.95, 0.96667) and selectivity (0.05).
+
+Breakup Table Insight:
+
+    σ: Entire plan = 42060.9
+    π (top): π + join subtree = 40058.0
+    ⨝: Join + both π subtrees = 40058.0
+    π (employees): π + employees = 38000.0
+    Table (employees): 40000.0
+    π (departments): π + departments = 58.0
+    Table (departments): 60.0
+
+Why Selection Pushdown is Best
+
+    Original (45883.5): Join processes 10000 rows because selection is applied after the join, leading to a high join cost (47060.0).
+    Selection Pushdown (37526.4): Selection reduces departments to 1 row before the join, lowering the join’s result to 500 rows and its cost to 40413.0.
+    Projection Pushdown (42060.9): Reduces columns early but doesn’t reduce rows until the final selection, so the join still processes 10000 rows (cost 40058.0).
+
+The Selection Pushdown plan minimizes the join’s intermediate result size, making it the most efficient.
