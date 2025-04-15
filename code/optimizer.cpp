@@ -9,7 +9,7 @@
 // Flag to enable/disable optimizations
 int enable_selection_pushdown = 1;
 int enable_projection_pushdown = 1;
-int enable_join_reordering = 0;
+
 int debugkaru = 0;
 
 Node* duplicate_node(Node *node) {
