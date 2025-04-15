@@ -118,7 +118,7 @@ TableStats *get_table_stats(const char *table_name) {
             return tables[i];
         }
     }
-    // printf("Warning: No statistics found for table %s\n", table_name);
+    // printf("No statistics found for table %s\n", table_name);
     return NULL;
 }
 
@@ -131,7 +131,7 @@ ColumnStats *get_column_stats(const char *table_name, const char *column_name) {
             return table->columns[i];
         }
     }
-    // printf("Warning: No statistics found for column %s.%s\n", table_name, column_name);
+    // printf(" No statistics found for column %s.%s\n", table_name, column_name);
     return NULL;
 }
 
