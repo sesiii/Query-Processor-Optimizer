@@ -1,0 +1,62 @@
+flex lexer.l
+bison -d parser.y
+g++ -Wno-write-strings lex.yy.c parser.tab.c main.cpp stats.cpp optimizer.cpp -o query_processor -lm	
+./query_processor
+Parsing query: SELECT departments.dept_name, projects.dept_id FROM projects JOIN departments ON projects.dept_id = departments.dept_id WHERE projects.budget > 100000;
+
+Original Abstract Syntax Tree:
+π(departments.dept_name,projects.dept_id)
+  σ(projects.budget > 100000)
+    ⨝(projects.dept_id = departments.dept_id)
+      table(projects)
+      table(departments)
+
+Optimizing query...
+Initializing statistics...
+Statistics initialized for 4 tables
+
+Original Execution Plan:
+--- Original Plan ---
+π(departments.dept_name,projects.dept_id) [rows=4545, cols=2, cost=9090.0]
+  σ(projects.budget > 100000) [rows=4545, cols=7, cost=31815.0]
+    ⨝(projects.dept_id = departments.dept_id) [rows=5000, cols=7, cost=35000.0]
+      table(projects) [rows=5000, cols=4, cost=20000.0]
+      table(departments) [rows=20, cols=3, cost=60.0]
+
+Applying selection push-down...
+--- Selection Pushdown Plan ---
+π(departments.dept_name,projects.dept_id) [rows=4545, cols=2, cost=9090.0]
+  ⨝(projects.dept_id = departments.dept_id) [rows=4545, cols=7, cost=31815.0]
+    σ(projects.budget > 100000) [rows=4545, cols=4, cost=18180.0]
+      table(projects) [rows=5000, cols=4, cost=20000.0]
+    table(departments) [rows=20, cols=3, cost=60.0]
+
+Applying projection push-down...
+--- Projection Pushdown Plan ---
+σ(projects.budget > 100000) [rows=4545, cols=2, cost=9090.0]
+  π(departments.dept_name,projects.dept_id) [rows=5000, cols=2, cost=10000.0]
+    ⨝(projects.dept_id = departments.dept_id) [rows=5000, cols=2, cost=10000.0]
+      π(projects.dept_id) [rows=5000, cols=1, cost=5000.0]
+        table(projects) [rows=5000, cols=4, cost=20000.0]
+      π(departments.dept_name,departments.dept_id) [rows=20, cols=2, cost=40.0]
+        table(departments) [rows=20, cols=3, cost=60.0]
+
+Cost Comparison:
+Metric          | Original      | Selection     | Projection    |
+----------------|---------------|---------------|---------------|
+Result Size     | 4545          | 4545          | 4545          | 
+Columns         | 2             | 2             | 2             |
+Total Cost      | 41765.5       | 38464.5       | 37338.0       |
+
+Projection Pushdown is the best plan(lowest cost) with total cost 37338.0
+
+Selected Best Execution Plan (Projection Pushdown):
+--- Best Plan ---
+σ(projects.budget > 100000) [rows=4545, cols=2, cost=9090.0]
+  π(departments.dept_name,projects.dept_id) [rows=5000, cols=2, cost=10000.0]
+    ⨝(projects.dept_id = departments.dept_id) [rows=5000, cols=2, cost=10000.0]
+      π(projects.dept_id) [rows=5000, cols=1, cost=5000.0]
+        table(projects) [rows=5000, cols=4, cost=20000.0]
+      π(departments.dept_name,departments.dept_id) [rows=20, cols=2, cost=40.0]
+        table(departments) [rows=20, cols=3, cost=60.0]
+rm -f lex.yy.c parser.tab.c parser.tab.h query_processor
